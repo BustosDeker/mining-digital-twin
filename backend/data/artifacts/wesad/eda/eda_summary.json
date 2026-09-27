@@ -1,0 +1,51 @@
+{
+  "dataset_name": "wesad",
+  "artifacts_dir": "C:\\Users\\Ronaldo\\Notas\\Art_Sant\\mining-digital-twin\\backend\\data\\artifacts\\wesad\\eda",
+  "class_distribution": {
+    "aggregate_counts": {
+      "undefined_transient": 7817600,
+      "baseline": 4126501,
+      "meditation": 2778999,
+      "stress": 2401000,
+      "amusement": 1306201,
+      "reserved_5": 184100,
+      "reserved_6": 172899,
+      "reserved_7": 158900
+    },
+    "n_subjects": 5
+  },
+  "quality_report": {
+    "dataset_name": "wesad",
+    "n_subjects": 5,
+    "subjects": [
+      "S10",
+      "S11",
+      "S13",
+      "S14",
+      "S15"
+    ],
+    "channels_present": [
+      "ACC_magnitude",
+      "ACC_x",
+      "ACC_y",
+      "ACC_z",
+      "ecg",
+      "eda",
+      "emg",
+      "resp",
+      "temp"
+    ],
+    "valid_class_counts": {
+      "baseline": 4126501,
+      "stress": 2401000,
+      "amusement": 1306201
+    },
+    "class_balance_ratio": {
+      "baseline": 0.5268,
+      "stress": 0.3065,
+      "amusement": 0.1667
+    },
+    "mean_flatline_pct_across_channels": 0.0,
+    "is_synthetic": false
+  }
+}
