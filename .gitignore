@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Entornos
+.env
+.env.local
+*.env.local
+
+# Datos pesados (el usuario descarga WESAD por separado)
+backend/data/raw/WESAD/
+backend/data/raw/WESAD.zip
+
+# OS
+.DS_Store

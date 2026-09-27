@@ -1,0 +1,13 @@
+subject_id,label_id,label_name,n_samples
+SYN1,0,undefined_transient,63000
+SYN1,1,baseline,210000
+SYN1,2,stress,210000
+SYN1,3,amusement,140000
+SYN2,0,undefined_transient,63000
+SYN2,1,baseline,210000
+SYN2,2,stress,210000
+SYN2,3,amusement,140000
+SYN3,0,undefined_transient,63000
+SYN3,1,baseline,210000
+SYN3,2,stress,210000
+SYN3,3,amusement,140000

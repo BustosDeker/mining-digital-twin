@@ -1,0 +1,36 @@
+{
+  "architecture_name": "features_mlp",
+  "version_id": "v_20260926T174945Z_319701d4",
+  "dataset_name": "wesad_synthetic_demo",
+  "hyperparams": {
+    "hidden_layers": [
+      32,
+      32
+    ],
+    "dropout_rate": 0.15,
+    "learning_rate": 0.0023,
+    "l2_regularization": 0.0001
+  },
+  "cv_metrics": {
+    "mean_accuracy": 0.9565217391304347,
+    "mean_precision_macro": 0.9629629629629629,
+    "mean_recall_macro": 0.9629629629629629,
+    "mean_f1_macro": 0.9517954812072459,
+    "mean_cohen_kappa": 0.9359744089249405,
+    "mean_auc": 1.0,
+    "std_accuracy": 0.07938008079785015,
+    "std_precision_macro": 0.06141897759917405,
+    "std_recall_macro": 0.06762006882779827,
+    "std_f1_macro": 0.08738926697616992,
+    "std_cohen_kappa": 0.11600534099921189,
+    "std_auc": 0.0
+  },
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "created_at": "2026-09-26T17:49:45.708319+00:00",
+  "has_scaler": true,
+  "extra": {}
+}

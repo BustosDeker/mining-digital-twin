@@ -1,0 +1,42 @@
+{
+  "architecture_name": "features_mlp",
+  "version_id": "v_20260926T224451Z_64f68fac",
+  "dataset_name": "wesad_synthetic_demo",
+  "hyperparams": {
+    "hidden_layers": [
+      16
+    ],
+    "dropout_rate": 0.2,
+    "learning_rate": 0.001,
+    "l2_regularization": 0.0001
+  },
+  "cv_metrics": {
+    "mean_f1_macro": 0.9
+  },
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "created_at": "2026-09-26T22:44:51.494745+00:00",
+  "has_scaler": true,
+  "extra": {
+    "feature_names": [
+      "acc_magnitude_mean",
+      "acc_magnitude_std",
+      "eda_mean",
+      "eda_n_scr_peaks",
+      "eda_slope",
+      "eda_std",
+      "emg_mean_abs",
+      "emg_std",
+      "hrv_mean_hr_bpm",
+      "hrv_rmssd_ms",
+      "hrv_sdnn_ms",
+      "resp_rate_per_min",
+      "resp_std",
+      "temp_mean",
+      "temp_std"
+    ]
+  }
+}

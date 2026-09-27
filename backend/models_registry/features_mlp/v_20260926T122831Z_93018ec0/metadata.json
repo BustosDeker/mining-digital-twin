@@ -1,0 +1,55 @@
+{
+  "architecture_name": "features_mlp",
+  "version_id": "v_20260926T122831Z_93018ec0",
+  "dataset_name": "wesad_synthetic_demo",
+  "hyperparams": {
+    "hidden_layers": [
+      32,
+      32
+    ],
+    "dropout_rate": 0.15,
+    "learning_rate": 0.0023,
+    "l2_regularization": 5.7e-05
+  },
+  "cv_metrics": {
+    "mean_accuracy": 0.9782608695652173,
+    "mean_precision_macro": 0.974867724867725,
+    "mean_recall_macro": 0.9814814814814814,
+    "mean_f1_macro": 0.9754778173895821,
+    "mean_cohen_kappa": 0.9670162400220202,
+    "mean_auc": 0.9993827160493828,
+    "std_accuracy": 0.0332070702533032,
+    "std_precision_macro": 0.03734284183463783,
+    "std_recall_macro": 0.028287504289850867,
+    "std_f1_macro": 0.037272043011546054,
+    "std_cohen_kappa": 0.050273734018660816,
+    "std_auc": 0.0013802888749998514
+  },
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "created_at": "2026-09-26T12:28:31.274403+00:00",
+  "has_scaler": true,
+  "extra": {
+    "feature_names": [
+      "acc_magnitude_mean",
+      "acc_magnitude_std",
+      "eda_mean",
+      "eda_n_scr_peaks",
+      "eda_slope",
+      "eda_std",
+      "emg_mean_abs",
+      "emg_std",
+      "hrv_mean_hr_bpm",
+      "hrv_rmssd_ms",
+      "hrv_sdnn_ms",
+      "resp_rate_per_min",
+      "resp_std",
+      "temp_mean",
+      "temp_std"
+    ],
+    "note": "DEMO con dataset sintetico, no usar en el articulo"
+  }
+}
