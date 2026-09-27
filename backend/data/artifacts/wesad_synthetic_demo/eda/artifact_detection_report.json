@@ -139,5 +139,99 @@
       "flatline_windows_pct": 0.0,
       "clipped_samples_pct": 0.001
     }
+  },
+  "SYN4": {
+    "acc_x": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "acc_y": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "acc_z": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "ecg": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0005
+    },
+    "emg": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "eda": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "temp": {
+      "flatline_windows": 516,
+      "flatline_windows_pct": 57.978,
+      "clipped_samples_pct": 0.0018
+    },
+    "resp": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0005
+    },
+    "acc_magnitude": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.001
+    }
+  },
+  "SYN5": {
+    "acc_x": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "acc_y": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "acc_z": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "ecg": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "emg": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "eda": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0006
+    },
+    "temp": {
+      "flatline_windows": 567,
+      "flatline_windows_pct": 63.708,
+      "clipped_samples_pct": 0.0018
+    },
+    "resp": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0003
+    },
+    "acc_magnitude": {
+      "flatline_windows": 0,
+      "flatline_windows_pct": 0.0,
+      "clipped_samples_pct": 0.0016
+    }
   }
 }

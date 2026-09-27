@@ -1,10 +1,12 @@
 {
   "dataset_name": "wesad_synthetic_demo",
-  "n_subjects": 3,
+  "n_subjects": 5,
   "subjects": [
     "SYN1",
     "SYN2",
-    "SYN3"
+    "SYN3",
+    "SYN4",
+    "SYN5"
   ],
   "channels_present": [
     "acc_magnitude",
@@ -18,15 +20,15 @@
     "temp"
   ],
   "valid_class_counts": {
-    "baseline": 630000,
-    "stress": 630000,
-    "amusement": 420000
+    "baseline": 1050000,
+    "stress": 1050000,
+    "amusement": 700000
   },
   "class_balance_ratio": {
     "baseline": 0.375,
     "stress": 0.375,
     "amusement": 0.25
   },
-  "mean_flatline_pct_across_channels": 6.496,
+  "mean_flatline_pct_across_channels": 6.6018,
   "is_synthetic": true
 }
