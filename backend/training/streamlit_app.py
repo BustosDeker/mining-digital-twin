@@ -78,22 +78,27 @@ def load_stats_results_from_disk():
         try:
             with open(STATS_RESULTS_PATH, "r") as f:
                 data = json.load(f)
-                return data.get("results"), data.get("config")
+                return data.get("results"), data.get("config"), data.get("model_metrics"), data.get("selected_models")
         except Exception as e:
             logger.warning(f"Error loading stats results from disk: {e}")
-    return None, None
+    return None, None, None, None
 
-def save_stats_results_to_disk(results, config):
+def save_stats_results_to_disk(results, config, model_metrics=None, selected_models=None):
     """Save stats results to disk."""
     STATS_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    data = {"results": results, "config": config}
+    if model_metrics:
+        data["model_metrics"] = model_metrics
+    if selected_models:
+        data["selected_models"] = selected_models
     with open(STATS_RESULTS_PATH, "w") as f:
-        json.dump({"results": results, "config": config}, f, indent=2)
+        json.dump(data, f, indent=2)
 
 # Initialize session state
 if "cv_results" not in st.session_state:
     st.session_state.cv_results, st.session_state.last_cv_config = load_cv_results_from_disk()
 if "stats_results" not in st.session_state:
-    st.session_state.stats_results, st.session_state.last_stats_config = load_stats_results_from_disk()
+    st.session_state.stats_results, st.session_state.last_stats_config, st.session_state.stats_model_metrics, st.session_state.stats_selected_models = load_stats_results_from_disk()
 if "last_cv_config" not in st.session_state:
     st.session_state.last_cv_config = None
 if "last_stats_config" not in st.session_state:
@@ -764,6 +769,8 @@ with tab_stats:
         if st.button("🗑️ Limpiar resultados estadísticos"):
             st.session_state.stats_results = None
             st.session_state.last_stats_config = None
+            st.session_state.stats_model_metrics = None
+            st.session_state.stats_selected_models = None
             if STATS_RESULTS_PATH.exists():
                 STATS_RESULTS_PATH.unlink()
             st.rerun()
@@ -772,6 +779,189 @@ with tab_stats:
         st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas (Previos)")
         st.dataframe(df_stats, use_container_width=True)
         st.divider()
+        
+        # Regenerate visualizations if data is available
+        if st.session_state.stats_model_metrics and st.session_state.stats_selected_models:
+            model_metrics = st.session_state.stats_model_metrics
+            model_names = st.session_state.stats_selected_models
+            
+            # Generate all visualizations
+            st.subheader("📊 FIGURA 4: Comparación Visual de Modelos (Interactivo)")
+            
+            accuracy_means = [np.mean(model_metrics[m]["accuracy"]) for m in model_names if m in model_metrics]
+            f1_means = [np.mean(model_metrics[m]["f1"]) for m in model_names if m in model_metrics]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                name='Accuracy',
+                x=model_names,
+                y=accuracy_means,
+                marker_color='rgba(55, 128, 191, 0.8)'
+            ))
+            fig.add_trace(go.Bar(
+                name='F1-Score',
+                x=model_names,
+                y=f1_means,
+                marker_color='rgba(219, 64, 82, 0.8)'
+            ))
+            
+            fig.update_layout(
+                barmode='group',
+                xaxis_title='Arquitectura',
+                yaxis_title='Score',
+                title='Comparación de Métricas por Arquitectura',
+                yaxis_range=[0.5, 1.0],
+                height=500
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Box plot
+            st.subheader("📊 FIGURA 5: Distribución de Accuracy por Modelo (Box Plot)")
+            fig_box = go.Figure()
+            for model in model_names:
+                if model in model_metrics:
+                    fig_box.add_trace(go.Box(
+                        y=model_metrics[model]["accuracy"],
+                        name=model,
+                        boxpoints='all',
+                        jitter=0.3,
+                        pointpos=-1.8
+                    ))
+            fig_box.update_layout(
+                yaxis_title='Accuracy',
+                title='Distribución de Accuracy por Modelo (con todos los folds)',
+                height=500
+            )
+            st.plotly_chart(fig_box, use_container_width=True)
+            
+            # Violin plot
+            st.subheader("📊 FIGURA 6: Distribución de F1-Score por Modelo (Violin Plot)")
+            fig_violin = go.Figure()
+            for model in model_names:
+                if model in model_metrics:
+                    fig_violin.add_trace(go.Violin(
+                        y=model_metrics[model]["f1"],
+                        name=model,
+                        box_visible=True,
+                        meanline_visible=True
+                    ))
+            fig_violin.update_layout(
+                yaxis_title='F1-Score',
+                title='Distribución de F1-Score por Modelo',
+                height=500
+            )
+            st.plotly_chart(fig_violin, use_container_width=True)
+            
+            # Scatter plot
+            st.subheader("📊 FIGURA 7: Accuracy vs F1-Score (Scatter Plot)")
+            fig_scatter = go.Figure()
+            for model in model_names:
+                if model in model_metrics:
+                    fig_scatter.add_trace(go.Scatter(
+                        x=model_metrics[model]["accuracy"],
+                        y=model_metrics[model]["f1"],
+                        name=model,
+                        mode='markers',
+                        marker=dict(size=10),
+                        text=[f"Fold {i+1}" for i in range(len(model_metrics[model]["accuracy"]))],
+                        hovertemplate='%{text}<br>Accuracy: %{x:.4f}<br>F1: %{y:.4f}<extra></extra>'
+                    ))
+            fig_scatter.update_layout(
+                xaxis_title='Accuracy',
+                yaxis_title='F1-Score',
+                title='Relación entre Accuracy y F1-Score por Fold',
+                height=500
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True)
+            
+            # Heatmap
+            st.subheader("📊 FIGURA 8: Correlación de Accuracy entre Modelos")
+            correlation_matrix = []
+            for model1 in model_names:
+                row = []
+                for model2 in model_names:
+                    if model1 in model_metrics and model2 in model_metrics:
+                        corr = np.corrcoef(model_metrics[model1]["accuracy"], model_metrics[model2]["accuracy"])[0, 1]
+                        row.append(corr if not np.isnan(corr) else 0)
+                    else:
+                        row.append(0)
+                correlation_matrix.append(row)
+            
+            fig_heatmap = go.Figure(data=go.Heatmap(
+                z=correlation_matrix,
+                x=model_names,
+                y=model_names,
+                colorscale='RdBu',
+                zmid=0.5,
+                text=[[f"{val:.2f}" for val in row] for row in correlation_matrix],
+                texttemplate="%{text}",
+                textfont={"size": 10},
+                colorbar=dict(title="Correlación")
+            ))
+            fig_heatmap.update_layout(
+                title='Matriz de Correlación de Accuracy entre Modelos',
+                height=500
+            )
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+            
+            # Ranking
+            st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio - Interactivo)")
+            mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
+            sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
+            rankings = {model: rank + 1 for rank, (model, _) in enumerate(sorted_models)}
+            
+            model_names_plot = [m for m, _ in sorted_models]
+            ranking_values = [rankings[m] for m in model_names_plot]
+            colors = ['green' if r == 1 else 'orange' if r == 2 else 'red' for r in ranking_values]
+            
+            fig = go.Figure(go.Bar(
+                x=ranking_values,
+                y=model_names_plot,
+                orientation='h',
+                marker_color=colors,
+                text=ranking_values,
+                textposition='auto'
+            ))
+            
+            fig.update_layout(
+                xaxis_title="Ranking (1 = mejor)",
+                title="Ranking de Modelos según Accuracy Promedio",
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Detailed analysis
+            st.subheader("📈 Análisis Estadístico Detallado")
+            st.write("**Desviación Estándar por Modelo:**")
+            std_data = []
+            for model in model_names:
+                if model in model_metrics:
+                    std_data.append({
+                        "Modelo": model,
+                        "Accuracy Std": f"{np.std(model_metrics[model]['accuracy']):.4f}",
+                        "F1-Score Std": f"{np.std(model_metrics[model]['f1']):.4f}",
+                        "Accuracy CV": f"{np.std(model_metrics[model]['accuracy'])/np.mean(model_metrics[model]['accuracy']):.2%}",
+                        "F1-Score CV": f"{np.std(model_metrics[model]['f1'])/np.mean(model_metrics[model]['f1']):.2%}"
+                    })
+            st.dataframe(pd.DataFrame(std_data), use_container_width=True)
+            
+            if len(model_metrics) >= 2:
+                st.write("**Comparaciones Pareadas (Accuracy):**")
+                paired_data = []
+                for i, model1 in enumerate(model_names):
+                    for j, model2 in enumerate(model_names):
+                        if i < j and model1 in model_metrics and model2 in model_metrics:
+                            diff = np.mean(model_metrics[model1]["accuracy"]) - np.mean(model_metrics[model2]["accuracy"])
+                            paired_data.append({
+                                "Modelo 1": model1,
+                                "Modelo 2": model2,
+                                "Diferencia": f"{diff:.4f}",
+                                "% Mejora": f"{abs(diff)/np.mean(model_metrics[model2]['accuracy'])*100:.2f}%",
+                                "Mejor": model1 if diff > 0 else model2
+                            })
+                st.dataframe(pd.DataFrame(paired_data), use_container_width=True)
+            
+            st.divider()
     
     if st.button("▶️ Ejecutar Pruebas Estadísticas", type="primary"):
         if not selected_models:
@@ -900,8 +1090,101 @@ with tab_stats:
                     st.success("**Explicabilidad:** La visualización interactiva facilita la identificación rápida del mejor modelo y "
                               "permite comunicar resultados a stakeholders no técnicos.")
                     
+                    # Box plot for distribution of accuracy across folds
+                    st.subheader("📊 FIGURA 5: Distribución de Accuracy por Modelo (Box Plot)")
+                    fig_box = go.Figure()
+                    for model in model_names:
+                        if model in model_metrics:
+                            fig_box.add_trace(go.Box(
+                                y=model_metrics[model]["accuracy"],
+                                name=model,
+                                boxpoints='all',
+                                jitter=0.3,
+                                pointpos=-1.8
+                            ))
+                    fig_box.update_layout(
+                        yaxis_title='Accuracy',
+                        title='Distribución de Accuracy por Modelo (con todos los folds)',
+                        height=500
+                    )
+                    st.plotly_chart(fig_box, use_container_width=True)
+                    st.info("**Interpretación:** Los box plots muestran la distribución de accuracy en cada fold. Cajas más altas y compactas indican mejor y más consistente rendimiento.")
+                    
+                    # Violin plot for F1-Score distribution
+                    st.subheader("📊 FIGURA 6: Distribución de F1-Score por Modelo (Violin Plot)")
+                    fig_violin = go.Figure()
+                    for model in model_names:
+                        if model in model_metrics:
+                            fig_violin.add_trace(go.Violin(
+                                y=model_metrics[model]["f1"],
+                                name=model,
+                                box_visible=True,
+                                meanline_visible=True
+                            ))
+                    fig_violin.update_layout(
+                        yaxis_title='F1-Score',
+                        title='Distribución de F1-Score por Modelo',
+                        height=500
+                    )
+                    st.plotly_chart(fig_violin, use_container_width=True)
+                    st.info("**Interpretación:** Los violin plots muestran la densidad de distribución del F1-Score. Formas más anchas indican mayor variabilidad en el rendimiento.")
+                    
+                    # Scatter plot: Accuracy vs F1-Score
+                    st.subheader("📊 FIGURA 7: Accuracy vs F1-Score (Scatter Plot)")
+                    fig_scatter = go.Figure()
+                    for model in model_names:
+                        if model in model_metrics:
+                            fig_scatter.add_trace(go.Scatter(
+                                x=model_metrics[model]["accuracy"],
+                                y=model_metrics[model]["f1"],
+                                name=model,
+                                mode='markers',
+                                marker=dict(size=10),
+                                text=[f"Fold {i+1}" for i in range(len(model_metrics[model]["accuracy"]))],
+                                hovertemplate='%{text}<br>Accuracy: %{x:.4f}<br>F1: %{y:.4f}<extra></extra>'
+                            ))
+                    fig_scatter.update_layout(
+                        xaxis_title='Accuracy',
+                        yaxis_title='F1-Score',
+                        title='Relación entre Accuracy y F1-Score por Fold',
+                        height=500
+                    )
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+                    st.info("**Interpretación:** Puntos cercanos a la diagonal (1:1) indican balance entre accuracy y F1-Score. Modelos con ambos valores altos son preferibles.")
+                    
+                    # Heatmap of correlations between models
+                    st.subheader("📊 FIGURA 8: Correlación de Accuracy entre Modelos")
+                    correlation_matrix = []
+                    for model1 in model_names:
+                        row = []
+                        for model2 in model_names:
+                            if model1 in model_metrics and model2 in model_metrics:
+                                corr = np.corrcoef(model_metrics[model1]["accuracy"], model_metrics[model2]["accuracy"])[0, 1]
+                                row.append(corr if not np.isnan(corr) else 0)
+                            else:
+                                row.append(0)
+                        correlation_matrix.append(row)
+                    
+                    fig_heatmap = go.Figure(data=go.Heatmap(
+                        z=correlation_matrix,
+                        x=model_names,
+                        y=model_names,
+                        colorscale='RdBu',
+                        zmid=0.5,
+                        text=[[f"{val:.2f}" for val in row] for row in correlation_matrix],
+                        texttemplate="%{text}",
+                        textfont={"size": 10},
+                        colorbar=dict(title="Correlación")
+                    ))
+                    fig_heatmap.update_layout(
+                        title='Matriz de Correlación de Accuracy entre Modelos',
+                        height=500
+                    )
+                    st.plotly_chart(fig_heatmap, use_container_width=True)
+                    st.info("**Interpretación:** Valores cercanos a 1 indican que los modelos tienen rendimiento similar en los mismos folds. Valores bajos sugieren comportamientos distintos.")
+                    
                     # Nemenyi-like ranking based on mean accuracy
-                    st.subheader("📊 FIGURA 5: Ranking de Modelos (por Accuracy Promedio - Interactivo)")
+                    st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio - Interactivo)")
                     
                     mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
                     sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
@@ -931,8 +1214,45 @@ with tab_stats:
                     st.success("**Explicabilidad:** El ranking visual interactivo permite identificar rápidamente el mejor modelo "
                               "y comparar el rendimiento relativo entre arquitecturas.")
                     
-                    # Save stats results to session state and disk
+                    # Additional statistical analysis
+                    st.subheader("📈 Análisis Estadístico Detallado")
+                    
+                    # Calculate standard deviations
+                    st.write("**Desviación Estándar por Modelo:**")
+                    std_data = []
+                    for model in model_names:
+                        if model in model_metrics:
+                            std_data.append({
+                                "Modelo": model,
+                                "Accuracy Std": f"{np.std(model_metrics[model]['accuracy']):.4f}",
+                                "F1-Score Std": f"{np.std(model_metrics[model]['f1']):.4f}",
+                                "Accuracy CV": f"{np.std(model_metrics[model]['accuracy'])/np.mean(model_metrics[model]['accuracy']):.2%}",
+                                "F1-Score CV": f"{np.std(model_metrics[model]['f1'])/np.mean(model_metrics[model]['f1']):.2%}"
+                            })
+                    st.dataframe(pd.DataFrame(std_data), use_container_width=True)
+                    st.info("**Interpretación:** Coeficiente de variación (CV) más bajo indica mayor consistencia del modelo across folds.")
+                    
+                    # Paired comparisons table
+                    if len(model_metrics) >= 2:
+                        st.write("**Comparaciones Pareadas (Accuracy):**")
+                        paired_data = []
+                        for i, model1 in enumerate(model_names):
+                            for j, model2 in enumerate(model_names):
+                                if i < j and model1 in model_metrics and model2 in model_metrics:
+                                    diff = np.mean(model_metrics[model1]["accuracy"]) - np.mean(model_metrics[model2]["accuracy"])
+                                    paired_data.append({
+                                        "Modelo 1": model1,
+                                        "Modelo 2": model2,
+                                        "Diferencia": f"{diff:.4f}",
+                                        "% Mejora": f"{abs(diff)/np.mean(model_metrics[model2]['accuracy'])*100:.2f}%",
+                                        "Mejor": model1 if diff > 0 else model2
+                                    })
+                        st.dataframe(pd.DataFrame(paired_data), use_container_width=True)
+                    
+                    # Save stats results and visualization data to session state and disk
                     st.session_state.stats_results = stats_results
+                    st.session_state.stats_model_metrics = model_metrics
+                    st.session_state.stats_selected_models = selected_models
                     stats_config = {
                         "models": tuple(sorted(selected_models)),
                         "tests": {
@@ -942,7 +1262,7 @@ with tab_stats:
                         }
                     }
                     st.session_state.last_stats_config = stats_config
-                    save_stats_results_to_disk(stats_results, stats_config)
+                    save_stats_results_to_disk(stats_results, stats_config, model_metrics, selected_models)
 
 with tab_selection:
     st.header("🏆 Selección del Mejor Modelo")
