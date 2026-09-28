@@ -123,8 +123,10 @@ function SceneContent({
 
 export function MineGraphScene(props: MineGraphSceneProps) {
   return (
-    <WebGLErrorBoundary>
-      <SceneContent {...props} />
-    </WebGLErrorBoundary>
+    <div className="h-full w-full overflow-hidden bg-[#020d12]">
+      <WebGLErrorBoundary>
+        <SceneContent {...props} />
+      </WebGLErrorBoundary>
+    </div>
   );
 }
