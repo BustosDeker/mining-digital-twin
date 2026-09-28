@@ -146,15 +146,34 @@ with tab_eda:
                       "reduciendo el sobreajuste y mejorando la generalización.")
 
             st.subheader("📊 TABLA 1: Reporte de Calidad de Datos")
-            st.json(summary["quality_report"])
+            # Convertir JSON a tabla visual
+            quality_data = []
+            for key, value in summary["quality_report"].items():
+                if isinstance(value, (list, dict)):
+                    quality_data.append({"Métrica": key, "Valor": str(value)})
+                else:
+                    quality_data.append({"Métrica": key, "Valor": value})
+            df_quality = pd.DataFrame(quality_data)
+            st.dataframe(df_quality, use_container_width=True)
             st.info("**Interpretación:** El reporte cuantifica la calidad de las señales biométricas en términos de "
                    "completitud, ruido y artefactos. Valores de calidad >80% son aceptables para entrenamiento.")
             st.success("**Explicabilidad:** La calidad de los datos impacta directamente en la capacidad del modelo "
                       "para aprender patrones robustos y generalizables.")
 
             with open(artifacts_dir / "artifact_detection_report.json", encoding="utf-8") as f:
+                artifact_data = json.load(f)
                 st.subheader("📊 TABLA 2: Detección de Artefactos por Sujeto/Canal")
-                st.json(json.load(f))
+                # Convertir a tabla visual
+                artifact_table = []
+                for subject, channels in artifact_data.items():
+                    for channel, artifacts in channels.items():
+                        artifact_table.append({
+                            "Sujeto": subject,
+                            "Canal": channel,
+                            "Artefactos": artifacts
+                        })
+                df_artifacts = pd.DataFrame(artifact_table)
+                st.dataframe(df_artifacts, use_container_width=True)
                 st.info("**Interpretación:** Esta tabla identifica la prevalencia de artefactos por sujeto y canal biométrico. "
                        "Sujetos con alta prevalencia de artefactos pueden requerir exclusión o limpieza especial.")
                 st.success("**Explicabilidad:** La detección sistemática de artefactos permite estrategias de limpieza "
@@ -175,52 +194,62 @@ with tab_training:
         "cnn_attention": "CNN + Attention (Híbrido) - Extracción + atención"
     }
     
-    selected_arch = st.selectbox(
-        "Seleccionar arquitectura", 
-        available_architectures,
-        format_func=lambda x: f"{x} - {arch_descriptions.get(x, '')}",
-        key="training_arch_select"
-    )
+    # Verificar modelos ya entrenados
+    models_registry_path = Path("backend/models_registry")
+    trained_models = set()
+    if models_registry_path.exists():
+        for arch_dir in models_registry_path.iterdir():
+            if arch_dir.is_dir() and not arch_dir.name.startswith('.'):
+                trained_models.add(arch_dir.name)
     
-    st.info(f"**Descripción:** {arch_descriptions.get(selected_arch, '')}")
+    st.subheader("Selección de Modelos para Entrenamiento")
+    st.write("Seleccione 1, 2 o todos los 6 modelos para entrenar:")
     
-    st.subheader("Hiperparámetros")
-    col1, col2 = st.columns(2)
+    selected_models = []
+    for arch in available_architectures:
+        is_trained = arch in trained_models
+        status = "✅ Entrenado" if is_trained else "⏳ No entrenado"
+        selected = st.checkbox(
+            f"{arch} - {arch_descriptions.get(arch, '')} [{status}]",
+            value=False,
+            key=f"train_{arch}"
+        )
+        if selected:
+            selected_models.append(arch)
     
-    with col1:
-        if selected_arch in ["cnn_lstm", "cnn_gru", "cnn_attention"]:
-            conv_filters = st.text_input("Conv filters (separados por coma)", value="32,64", key="training_conv_filters")
-            conv_kernel_size = st.number_input("Conv kernel size", value=5, key="training_conv_kernel")
+    if not selected_models:
+        st.warning("Seleccione al menos un modelo para entrenar.")
+    else:
+        st.success(f"Modelos seleccionados: {', '.join(selected_models)}")
         
-        if selected_arch in ["cnn_lstm", "gru_lstm"]:
-            lstm_units = st.number_input("LSTM units", value=64, key="training_lstm_units")
+        # Verificar si se requiere reentrenamiento
+        retrain_needed = False
+        for model in selected_models:
+            if model in trained_models:
+                st.warning(f"⚠️ El modelo {model} ya está entrenado. Se reentrenará con los nuevos hiperparámetros.")
+                retrain_needed = True
         
-        if selected_arch in ["cnn_gru", "gru_lstm"]:
-            gru_units = st.number_input("GRU units", value=64, key="training_gru_units")
+        st.subheader("Hiperparámetros Comunes")
+        col1, col2 = st.columns(2)
         
-        if selected_arch in ["attention", "cnn_attention"]:
-            attention_units = st.number_input("Attention units", value=64, key="training_attention_units")
-    
-    with col2:
-        dropout_rate = st.slider("Dropout rate", 0.0, 1.0, 0.3, key="training_dropout")
-        learning_rate = st.number_input("Learning rate", value=0.001, format="%.6f", key="training_lr")
-        dense_units = st.number_input("Dense units", value=32, key="training_dense_units")
+        with col1:
+            dropout_rate = st.slider("Dropout rate", 0.0, 1.0, 0.3, key="training_dropout")
+            learning_rate = st.number_input("Learning rate", value=0.001, format="%.6f", key="training_lr")
         
-        if selected_arch == "features_mlp":
-            hidden_layers = st.text_input("Hidden layers (separados por coma)", value="64,32", key="training_hidden_layers")
-            l2_regularization = st.number_input("L2 regularization", value=0.0001, format="%.6f", key="training_l2")
-    
-    use_class_weight = st.checkbox("Usar class_weight", value=True, key="training_class_weight")
-    early_stopping = st.checkbox("Early stopping", value=True, key="training_early_stopping")
-    
-    st.subheader("Configuración de Entrenamiento")
-    epochs = st.number_input("Número de epochs", value=50, min_value=1, max_value=200, key="training_epochs")
-    batch_size = st.number_input("Batch size", value=32, min_value=1, max_value=128, key="training_batch_size")
-    
-    if st.button("▶️ Iniciar Entrenamiento", type="primary"):
-        st.success(f"Entrenamiento iniciado para {selected_arch}...")
-        st.info("El proceso de entrenamiento se ejecutará en segundo plano.")
-        st.warning("Nota: Esta funcionalidad requiere implementación completa del pipeline de entrenamiento.")
+        with col2:
+            use_class_weight = st.checkbox("Usar class_weight", value=True, key="training_class_weight")
+            early_stopping = st.checkbox("Early stopping", value=True, key="training_early_stopping")
+        
+        st.subheader("Configuración de Entrenamiento")
+        epochs = st.number_input("Número de epochs", value=50, min_value=1, max_value=200, key="training_epochs")
+        batch_size = st.number_input("Batch size", value=32, min_value=1, max_value=128, key="training_batch_size")
+        
+        if st.button("▶️ Iniciar Entrenamiento", type="primary"):
+            if retrain_needed:
+                st.warning("Algunos modelos se reentrenarán con los nuevos hiperparámetros.")
+            st.success(f"Entrenamiento iniciado para {len(selected_models)} modelo(s): {', '.join(selected_models)}")
+            st.info("El proceso de entrenamiento se ejecutará en segundo plano.")
+            st.warning("Nota: Esta funcionalidad requiere implementación completa del pipeline de entrenamiento.")
 
 with tab_cv:
     st.header("⚖️ Validación Cruzada")
@@ -297,7 +326,7 @@ with tab_stats:
             # Simulación de resultados estadísticos
             st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas")
             stats_data = {
-                "Prueba": ["Friedman Chi-square", "p-value", "Wilcoxon (mejor vs segundo)", "p-value"],
+                "Prueba": ["Friedman Chi-square", "p-value Friedman", "Wilcoxon (mejor vs segundo)", "p-value Wilcoxon"],
                 "Valor": [15.23, 0.002, 45.67, 0.001],
                 "Interpretación": ["Diferencias significativas entre modelos", "p < 0.05 (significativo)", 
                                  "Mejor modelo superior significativamente", "p < 0.01 (muy significativo)"]
