@@ -30,18 +30,18 @@ export function TopBar({
   ];
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-hairline bg-panel px-4">
-      <div className="flex items-center gap-6">
-        <h1 className="text-[13px] font-semibold uppercase tracking-wide text-steel2">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-hairline bg-panel px-6">
+      <div className="flex items-center gap-8">
+        <h1 className="text-[16px] font-semibold uppercase tracking-wide text-steel2">
           {t.appTitle}
         </h1>
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={clsx(
-                "rounded-sm px-3 py-1.5 text-[12px] font-medium transition-colors",
+                "rounded-sm px-5 py-2.5 text-[14px] font-medium transition-colors",
                 activeTab === tab.id
                   ? "bg-panel2 text-signal"
                   : "text-steel hover:text-steel2"
@@ -53,12 +53,12 @@ export function TopBar({
         </nav>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-6">
         {connectionLabel && (
-          <div className="flex items-center gap-1.5 font-mono text-[11px] text-steel">
+          <div className="flex items-center gap-2 font-mono text-[13px] text-steel">
             <span
               className={clsx(
-                "h-1.5 w-1.5 rounded-full",
+                "h-2 w-2 rounded-full",
                 connected ? "bg-signal animate-pulse-signal" : "bg-amber"
               )}
             />
@@ -68,14 +68,14 @@ export function TopBar({
 
         <button
           onClick={() => setLocale(locale === "es" ? "en" : "es")}
-          className="rounded-sm border border-hairline px-2 py-1 font-mono text-[11px] text-steel hover:text-steel2"
+          className="rounded-sm border border-hairline px-4 py-2 font-mono text-[13px] text-steel hover:text-steel2"
         >
           {locale.toUpperCase()}
         </button>
 
         <button
           onClick={toggleTheme}
-          className="rounded-sm border border-hairline px-2 py-1 text-[11px] text-steel hover:text-steel2"
+          className="rounded-sm border border-hairline px-4 py-2 text-[13px] text-steel hover:text-steel2"
         >
           {theme === "dark" ? "☾" : "☀"}
         </button>

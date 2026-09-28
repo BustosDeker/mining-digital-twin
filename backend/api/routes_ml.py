@@ -14,7 +14,7 @@ from backend.api.schemas import (
     PredictStressResponse,
     RunEDARequest,
 )
-from backend.biometrics.inference import stress_inference_engine
+# Lazy import to avoid TensorFlow loading at startup
 from backend.services import model_registry as mr
 from backend.training import synthetic_wesad, wesad_loader  # noqa: F401 - registran los datasets
 from backend.training.dataset_loader import DATASET_REGISTRY, get_loader
@@ -114,6 +114,8 @@ def activate_model(architecture_name: str, version_id: str) -> ActivateModelResp
 @router.post("/predict", response_model=PredictStressResponse)
 def predict_stress(payload: PredictStressRequest) -> PredictStressResponse:
     try:
+        # Lazy import to avoid TensorFlow loading at startup
+        from backend.biometrics.inference import stress_inference_engine
         result = stress_inference_engine.predict_from_features(payload.features)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

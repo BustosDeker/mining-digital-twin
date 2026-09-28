@@ -55,8 +55,14 @@ export function CameraRig({ nodes, agents, followedAgentId }: CameraRigProps) {
       makeDefault
       enableDamping
       dampingFactor={0.08}
-      minDistance={2}
-      maxDistance={60}
+      minDistance={1}
+      maxDistance={150}
+      minPolarAngle={0}
+      maxPolarAngle={Math.PI}
+      enablePan={true}
+      panSpeed={1}
+      rotateSpeed={1}
+      zoomSpeed={1.5}
     />
   );
 }

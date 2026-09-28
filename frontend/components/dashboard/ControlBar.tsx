@@ -37,7 +37,7 @@ function ControlButton({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        "rounded-sm border px-3 py-1.5 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+        "rounded-sm border px-4 py-2 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary"
           ? "border-signal/40 text-signal hover:bg-signal/10"
           : "border-hairline text-steel2 hover:bg-panel2"

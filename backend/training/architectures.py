@@ -12,8 +12,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import tensorflow as tf
-from tensorflow.keras import layers, models
+# Lazy import TensorFlow to avoid memory issues at startup
+def get_tensorflow():
+    try:
+        import tensorflow as tf
+        return tf
+    except ImportError as e:
+        from backend.utils.logging_config import get_logger
+        logger = get_logger(__name__)
+        logger.warning(f"TensorFlow not available: {e}")
+        return None
 
 
 @dataclass
@@ -144,11 +152,17 @@ class CNNAttentionHyperparams:
 
 def build_cnn_lstm_model(
     input_shape: tuple[int, int], n_classes: int, hp: CNNLSTMHyperparams | None = None
-) -> tf.keras.Model:
+) -> Any:
     """CNN-1D + LSTM sobre ventanas de señal cruda multicanal.
 
     input_shape = (longitud_ventana, n_canales).
     """
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot build model.")
+    
+    from tensorflow.keras import layers, models
+    
     hp = hp or CNNLSTMHyperparams()
 
     inputs = layers.Input(shape=input_shape, name="raw_signal_window")
@@ -175,8 +189,14 @@ def build_cnn_lstm_model(
 
 def build_features_mlp_model(
     input_dim: int, n_classes: int, hp: FeaturesMLPHyperparams | None = None
-) -> tf.keras.Model:
+) -> Any:
     """MLP sobre el vector de features HRV/EDA extraído por ventana."""
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot build model.")
+    
+    from tensorflow.keras import layers, models
+    
     hp = hp or FeaturesMLPHyperparams()
 
     inputs = layers.Input(shape=(input_dim,), name="hrv_eda_features")
@@ -202,8 +222,14 @@ def build_features_mlp_model(
 
 def build_cnn_gru_model(
     input_shape: tuple[int, int], n_classes: int, hp: CNNGRUHyperparams | None = None
-) -> tf.keras.Model:
+) -> Any:
     """CNN-1D + GRU sobre ventanas de señal cruda multicanal (híbrido)."""
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot build model.")
+    
+    from tensorflow.keras import layers, models
+    
     hp = hp or CNNGRUHyperparams()
 
     inputs = layers.Input(shape=input_shape, name="raw_signal_window")
@@ -230,8 +256,14 @@ def build_cnn_gru_model(
 
 def build_gru_lstm_model(
     input_shape: tuple[int, int], n_classes: int, hp: GRULSTMHyperparams | None = None
-) -> tf.keras.Model:
+) -> Any:
     """GRU + LSTM bidireccional sobre ventanas de señal cruda (híbrido)."""
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot build model.")
+    
+    from tensorflow.keras import layers, models
+    
     hp = hp or GRULSTMHyperparams()
 
     inputs = layers.Input(shape=input_shape, name="raw_signal_window")
@@ -258,8 +290,14 @@ def build_gru_lstm_model(
 
 def build_attention_model(
     input_shape: tuple[int, int], n_classes: int, hp: AttentionHyperparams | None = None
-) -> tf.keras.Model:
+) -> Any:
     """Attention-based model para señales temporales."""
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot build model.")
+    
+    from tensorflow.keras import layers, models
+    
     hp = hp or AttentionHyperparams()
 
     inputs = layers.Input(shape=input_shape, name="raw_signal_window")
@@ -289,8 +327,14 @@ def build_attention_model(
 
 def build_cnn_attention_model(
     input_shape: tuple[int, int], n_classes: int, hp: CNNAttentionHyperparams | None = None
-) -> tf.keras.Model:
+) -> Any:
     """CNN + Attention sobre ventanas de señal cruda (híbrido)."""
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot build model.")
+    
+    from tensorflow.keras import layers, models
+    
     hp = hp or CNNAttentionHyperparams()
 
     inputs = layers.Input(shape=input_shape, name="raw_signal_window")

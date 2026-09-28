@@ -116,7 +116,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            <aside className="panel-scroll w-72 shrink-0 overflow-y-auto border-l border-hairline bg-panel">
+            <aside className="panel-scroll w-96 shrink-0 overflow-y-auto border-l border-hairline bg-panel">
               <StressPanel agents={snapshot?.agents ?? {}} step={snapshot?.step ?? 0} />
               <EventLogPanel hazards={snapshot?.active_hazards ?? []} />
               <LegendPanel />

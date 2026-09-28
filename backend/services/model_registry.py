@@ -22,11 +22,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 
 from backend.utils.config import get_settings
 from backend.utils.logging_config import get_logger
+
+# Lazy import TensorFlow to avoid memory issues at startup
+def get_tensorflow():
+    try:
+        import tensorflow as tf
+        return tf
+    except ImportError as e:
+        logger = get_logger(__name__)
+        logger.warning(f"TensorFlow not available: {e}")
+        return None
 
 logger = get_logger(__name__)
 
@@ -72,7 +81,7 @@ def _version_dir(architecture_name: str, version_id: str) -> Path:
 
 
 def register_model(
-    model: tf.keras.Model,
+    model: Any,  # Changed from tf.keras.Model to Any to avoid import at module level
     architecture_name: str,
     dataset_name: str,
     hyperparams: dict[str, Any],
@@ -139,7 +148,11 @@ def get_model_metadata(architecture_name: str, version_id: str) -> ModelMetadata
         return ModelMetadata.from_dict(json.load(f))
 
 
-def load_model(architecture_name: str, version_id: str) -> tuple[tf.keras.Model, StandardScaler | None, ModelMetadata]:
+def load_model(architecture_name: str, version_id: str) -> tuple[Any, StandardScaler | None, ModelMetadata]:
+    tf = get_tensorflow()
+    if tf is None:
+        raise ImportError("TensorFlow is not available. Cannot load model.")
+    
     version_dir = _version_dir(architecture_name, version_id)
     model = tf.keras.models.load_model(version_dir / "model.h5")
 
@@ -187,7 +200,7 @@ def get_active_pointer() -> dict[str, str] | None:
         return json.load(f)
 
 
-def load_active_model() -> tuple[tf.keras.Model, StandardScaler | None, ModelMetadata] | None:
+def load_active_model() -> tuple[Any, StandardScaler | None, ModelMetadata] | None:
     pointer = get_active_pointer()
     if pointer is None:
         return None

@@ -11,7 +11,7 @@ interface StressPanelProps {
 
 function StatRow({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
-    <div className="flex items-center justify-between py-1 text-[12px]">
+    <div className="flex items-center justify-between py-2 text-[14px]">
       <span className="text-steel">{label}</span>
       <span className="font-mono font-medium" style={{ color }}>
         {value}
@@ -42,19 +42,19 @@ export function StressPanel({ agents, step }: StressPanelProps) {
   const panicPct = Math.round(stats.avgPanic * 100);
 
   return (
-    <div className="border-b border-hairline p-4">
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-steel">
+    <div className="border-b border-hairline p-5">
+      <h3 className="mb-3 text-[14px] font-semibold uppercase tracking-wide text-steel">
         {t.stressPanel.title}
       </h3>
 
-      <div className="mb-3">
-        <div className="mb-1 flex items-center justify-between text-[11px] text-steel">
+      <div className="mb-4">
+        <div className="mb-2 flex items-center justify-between text-[13px] text-steel">
           <span>{t.stressPanel.avgPanic}</span>
           <span className="font-mono text-steel2">{panicPct}%</span>
         </div>
-        <div className="h-1.5 w-full rounded-full bg-panel2">
+        <div className="h-2 w-full rounded-full bg-panel2">
           <div
-            className="h-1.5 rounded-full transition-all"
+            className="h-2 rounded-full transition-all"
             style={{
               width: `${panicPct}%`,
               backgroundColor:
@@ -69,7 +69,7 @@ export function StressPanel({ agents, step }: StressPanelProps) {
       <StatRow label={t.stressPanel.sheltered} value={stats.sheltered} color="#5FA8FF" />
       <StatRow label={t.stressPanel.lost} value={stats.lost} color="#FF5C5C" />
 
-      <div className="mt-2 border-t border-hairline pt-2 text-[11px] text-steel">
+      <div className="mt-3 border-t border-hairline pt-3 text-[13px] text-steel">
         {t.stressPanel.step}: <span className="font-mono text-steel2">{step}</span>
       </div>
     </div>
