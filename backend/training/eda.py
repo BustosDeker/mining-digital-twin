@@ -224,6 +224,18 @@ def _quality_report(
     artifacts: dict[str, Any],
     out_dir: Path,
 ) -> dict[str, Any]:
+    if not recordings:
+        return {
+            "dataset_name": "unknown",
+            "n_subjects": 0,
+            "subjects": [],
+            "channels_present": [],
+            "valid_class_counts": {},
+            "class_balance_ratio": {},
+            "mean_flatline_pct_across_channels": 0.0,
+            "is_synthetic": False,
+        }
+    
     total_flatline_pct = np.mean(
         [
             ch_report["flatline_windows_pct"]
@@ -234,7 +246,7 @@ def _quality_report(
 
     valid_counts = {
         name: count
-        for name, count in class_dist["aggregate_counts"].items()
+        for name, count in class_dist.get("aggregate_counts", {}).items()
         if name in valid_class_names
     }
     total_valid = sum(valid_counts.values()) or 1
@@ -245,8 +257,9 @@ def _quality_report(
     report = {
         "dataset_name": recordings[0].dataset_name,
         "n_subjects": len(recordings),
+        "n_subjects_requested": class_dist.get("n_subjects_requested", len(recordings)),
         "subjects": [r.subject_id for r in recordings],
-        "channels_present": sorted(recordings[0].channels.keys()),
+        "channels_present": sorted(recordings[0].channels.keys()) if recordings[0].channels else [],
         "valid_class_counts": valid_counts,
         "class_balance_ratio": class_balance_ratio,
         "mean_flatline_pct_across_channels": round(float(total_flatline_pct), 4),
@@ -272,19 +285,164 @@ def run_eda(loader: DatasetLoader, subject_limit: int | None = None) -> dict[str
     subjects = loader.list_subjects()
     if subject_limit:
         subjects = subjects[:subject_limit]
-    recordings = [loader.load_subject(sid) for sid in subjects]
-
+    
     out_dir = _artifacts_dir(loader.dataset_name)
     valid_class_names = settings.STRESS_CLASSES
 
-    logger.info("Iniciando EDA", extra={"dataset": loader.dataset_name, "n_subjects": len(recordings)})
+    logger.info("Iniciando EDA", extra={"dataset": loader.dataset_name, "n_subjects": len(subjects)})
 
-    class_dist = _class_distribution(recordings, out_dir)
-    _per_channel_stats_by_class(recordings, valid_class_names, out_dir)
-    _example_signals(recordings, valid_class_names, out_dir)
-    artifacts = _detect_artifacts(recordings, out_dir)
-    _correlation_heatmap(recordings, valid_class_names, out_dir)
-    quality = _quality_report(recordings, valid_class_names, class_dist, artifacts, out_dir)
+    # Process subjects incrementally to avoid memory issues
+    all_recordings = []
+    class_dist_rows = []
+    per_channel_stats_rows = []
+    artifacts_report = {}
+    example_recording = None
+    
+    for subject_id in subjects:
+        try:
+            recording = loader.load_subject(subject_id)
+            all_recordings.append(recording)
+            
+            # Process class distribution incrementally
+            values, counts = np.unique(recording.labels, return_counts=True)
+            for v, c in zip(values, counts):
+                label_name = recording.label_names.get(int(v), "unknown")
+                class_dist_rows.append(
+                    {
+                        "subject_id": recording.subject_id,
+                        "label_id": int(v),
+                        "label_name": label_name,
+                        "n_samples": int(c),
+                    }
+                )
+            
+            # Process per-channel stats incrementally
+            for label_id, label_name in recording.label_names.items():
+                if label_name not in valid_class_names:
+                    continue
+                mask = recording.labels == label_id
+                if not mask.any():
+                    continue
+                for channel_name, values in recording.channels.items():
+                    segment = values[mask]
+                    per_channel_stats_rows.append(
+                        {
+                            "subject_id": recording.subject_id,
+                            "label_name": label_name,
+                            "channel": channel_name,
+                            "mean": float(np.mean(segment)),
+                            "std": float(np.std(segment)),
+                            "min": float(np.min(segment)),
+                            "max": float(np.max(segment)),
+                        }
+                    )
+            
+            # Process artifacts incrementally
+            subject_report = {}
+            for channel_name, values in recording.channels.items():
+                n_windows = len(values) // _FLATLINE_WINDOW_SAMPLES
+                if n_windows == 0:
+                    continue
+                trimmed = values[: n_windows * _FLATLINE_WINDOW_SAMPLES]
+                reshaped = trimmed.reshape(n_windows, _FLATLINE_WINDOW_SAMPLES)
+                stds = reshaped.std(axis=1)
+                n_flatline = int(np.sum(stds < _FLATLINE_STD_THRESHOLD))
+
+                value_range = np.max(values) - np.min(values)
+                clipping_threshold = 0.001 * value_range if value_range > 0 else 0
+                n_clipped_high = int(np.sum(values >= np.max(values) - clipping_threshold))
+                n_clipped_low = int(np.sum(values <= np.min(values) + clipping_threshold))
+
+                subject_report[channel_name] = {
+                    "flatline_windows": n_flatline,
+                    "flatline_windows_pct": round(100 * n_flatline / n_windows, 3),
+                    "clipped_samples_pct": round(100 * (n_clipped_high + n_clipped_low) / len(values), 4),
+                }
+            artifacts_report[recording.subject_id] = subject_report
+            
+            # Keep first recording for example signals
+            if example_recording is None:
+                example_recording = recording
+            
+            # Clear recording from memory to avoid accumulation
+            del recording
+            
+        except MemoryError:
+            logger.warning(f"MemoryError loading subject {subject_id}, skipping...")
+            continue
+        except Exception as e:
+            logger.warning(f"Error loading subject {subject_id}: {e}")
+            continue
+
+    # Save class distribution
+    if not class_dist_rows:
+        logger.warning("No class distribution data collected from any subjects")
+        class_dist = {"aggregate_counts": {}, "n_subjects_processed": 0, "n_subjects_requested": subject_limit if subject_limit else len(subjects)}
+    else:
+        df_class_dist = pd.DataFrame(class_dist_rows)
+        df_class_dist.to_csv(out_dir / "class_distribution_by_subject.csv", index=False)
+        
+        if "label_name" not in df_class_dist.columns:
+            logger.error("label_name column missing from class distribution data")
+            class_dist = {"aggregate_counts": {}, "n_subjects_processed": len(all_recordings), "n_subjects_requested": subject_limit if subject_limit else len(subjects)}
+        else:
+            aggregate = df_class_dist.groupby("label_name")["n_samples"].sum().sort_values(ascending=False)
+            aggregate.to_csv(out_dir / "class_distribution_aggregate.csv")
+
+            fig, ax = plt.subplots(figsize=(8, 5))
+            aggregate.plot(kind="bar", ax=ax, color=sns.color_palette("viridis", len(aggregate)))
+            ax.set_ylabel("Número de muestras (a frecuencia nativa)")
+            ax.set_title(f"Distribución de clases — {loader.dataset_name}")
+            fig.tight_layout()
+            fig.savefig(out_dir / "class_distribution.png", dpi=150)
+            plt.close(fig)
+
+            class_dist = {"aggregate_counts": aggregate.to_dict(), "n_subjects": len(all_recordings)}
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    aggregate.plot(kind="bar", ax=ax, color=sns.color_palette("viridis", len(aggregate)))
+    ax.set_ylabel("Número de muestras (a frecuencia nativa)")
+    ax.set_title(f"Distribución de clases — {loader.dataset_name}")
+    fig.tight_layout()
+    fig.savefig(out_dir / "class_distribution.png", dpi=150)
+    plt.close(fig)
+
+    class_dist = {"aggregate_counts": aggregate.to_dict(), "n_subjects_processed": len(all_recordings), "n_subjects_requested": subject_limit if subject_limit else len(subjects)}
+
+    # Save per-channel stats
+    df_stats = pd.DataFrame(per_channel_stats_rows)
+    df_stats.to_csv(out_dir / "per_channel_stats_by_class.csv", index=False)
+    summary = df_stats.groupby(["channel", "label_name"])[["mean", "std"]].mean().reset_index()
+    summary.to_csv(out_dir / "per_channel_stats_summary.csv", index=False)
+
+    # Save artifacts
+    with open(out_dir / "artifact_detection_report.json", "w", encoding="utf-8") as f:
+        json.dump(artifacts_report, f, indent=2, ensure_ascii=False)
+
+    # Generate example signals using first recording
+    if example_recording:
+        _example_signals([example_recording], valid_class_names, out_dir)
+
+    # Generate correlation heatmap (may still be memory-intensive, limit subjects)
+    if len(all_recordings) <= 3:  # Only for small number of subjects
+        _correlation_heatmap(all_recordings, valid_class_names, out_dir)
+    else:
+        logger.warning("Skipping correlation heatmap due to large number of subjects (memory constraint)")
+
+    # Generate quality report
+    if all_recordings:
+        quality = _quality_report(all_recordings, valid_class_names, class_dist, artifacts_report, out_dir)
+    else:
+        quality = {
+            "dataset_name": loader.dataset_name,
+            "n_subjects": 0,
+            "subjects": [],
+            "channels_present": [],
+            "valid_class_counts": {},
+            "class_balance_ratio": {},
+            "mean_flatline_pct_across_channels": 0.0,
+            "is_synthetic": False,
+        }
 
     summary = {
         "dataset_name": loader.dataset_name,

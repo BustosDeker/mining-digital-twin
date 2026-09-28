@@ -1,6 +1,7 @@
 {
   "dataset_name": "wesad",
-  "n_subjects": 15,
+  "n_subjects": 7,
+  "n_subjects_requested": 10,
   "subjects": [
     "S10",
     "S11",
@@ -8,15 +9,7 @@
     "S14",
     "S15",
     "S16",
-    "S17",
-    "S2",
-    "S3",
-    "S4",
-    "S5",
-    "S6",
-    "S7",
-    "S8",
-    "S9"
+    "S17"
   ],
   "channels_present": [
     "ACC_magnitude",
@@ -30,14 +23,14 @@
     "temp"
   ],
   "valid_class_counts": {
-    "baseline": 12327702,
-    "stress": 6976201,
-    "amusement": 3902501
+    "baseline": 5779201,
+    "stress": 3378201,
+    "amusement": 1824201
   },
   "class_balance_ratio": {
-    "baseline": 0.5312,
-    "stress": 0.3006,
-    "amusement": 0.1682
+    "baseline": 0.5263,
+    "stress": 0.3076,
+    "amusement": 0.1661
   },
   "mean_flatline_pct_across_channels": 0.0,
   "is_synthetic": false

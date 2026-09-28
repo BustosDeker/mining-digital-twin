@@ -1,5 +1,19 @@
 {
-  "architecture_name": "features_mlp",
-  "version_id": "v_20260926T224451Z_64f68fac",
-  "activated_at": "2026-09-27T17:15:36.491132+00:00"
+  "architecture_name": "cnn_lstm",
+  "version_id": "20260927_195021",
+  "activated_at": "2026-09-27T23:16:06.641213",
+  "selection_criteria": "Precisi\u00f3n (Accuracy)",
+  "metric_value": 0.36665000000000003,
+  "metadata": {
+    "architecture_name": "cnn_lstm",
+    "version_id": "20260927_195021",
+    "epochs": 50,
+    "batch_size": 32,
+    "trained_at": "2026-09-27T19:50:21.419837",
+    "class_names": [
+      "0",
+      "1",
+      "2"
+    ]
+  }
 }

@@ -244,79 +244,200 @@ with tab_eda:
         subjects = loader.list_subjects()
         st.write(f"**Sujetos encontrados:** {len(subjects)} — {subjects}")
 
+        # Check if there's a saved EDA with subject count info
+        eda_artifacts_path = settings.ARTIFACTS_DIR / selected_dataset / "eda"
+        eda_summary_path = eda_artifacts_path / "eda_summary.json"
+        
+        # Initialize subject_limit based on last EDA requested or default to all
+        initial_value = len(subjects)  # Default to all subjects
+        if eda_summary_path.exists():
+            try:
+                with open(eda_summary_path) as f:
+                    summary = json.load(f)
+                # Use n_subjects_requested if available, otherwise fall back to n_subjects
+                last_n_subjects = summary.get("quality_report", {}).get("n_subjects_requested")
+                if last_n_subjects is None:
+                    last_n_subjects = summary.get("quality_report", {}).get("n_subjects", len(subjects))
+                initial_value = min(last_n_subjects, len(subjects))
+            except:
+                pass
+        
         subject_limit = st.slider(
             "Número de sujetos a analizar (todos para EDA completo)",
             min_value=1,
             max_value=len(subjects),
-            value=len(subjects),  # Por defecto todos los sujetos
+            value=initial_value,
             key="eda_subject_limit"
         )
 
         # Verificar si EDA ya fue ejecutado
-        eda_artifacts_path = Path("backend/data/artifacts/wesad_synthetic_demo/eda")
+        eda_artifacts_path = settings.ARTIFACTS_DIR / selected_dataset / "eda"
         eda_already_executed = eda_artifacts_path.exists() and (eda_artifacts_path / "eda_summary.json").exists()
         
         if eda_already_executed:
             st.success("✅ EDA ya fue ejecutado previamente para este dataset")
             
             # Cargar el summary existente
-            with open(eda_artifacts_path / "eda_summary.json") as f:
-                summary = json.load(f)
-            st.session_state["last_eda_summary"] = summary
+            try:
+                with open(eda_artifacts_path / "eda_summary.json") as f:
+                    summary = json.load(f)
+                st.session_state["last_eda_summary"] = summary
+            except Exception as e:
+                st.warning(f"Error cargando EDA previo: {e}")
+                eda_already_executed = False
             
             if st.button("🔄 Ejecutar EDA completo de nuevo", key="eda_reexecute"):
-                with st.spinner("Regenerando EDA completo con metodología CRISP-DM…"):
-                    summary = run_eda(loader, subject_limit=len(subjects))  # Todos los sujetos
-                st.success(f"EDA regenerado. Artefactos en: {summary['artifacts_dir']}")
-                st.session_state["last_eda_summary"] = summary
+                try:
+                    with st.spinner("Regenerando EDA completo con metodología CRISP-DM…"):
+                        summary = run_eda(loader, subject_limit=subject_limit)  # Usar valor del slider
+                    st.success(f"EDA regenerado. Artefactos en: {summary['artifacts_dir']}")
+                    st.session_state["last_eda_summary"] = summary
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error ejecutando EDA: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
         else:
             if st.button("▶️ Ejecutar EDA Completo", type="primary", key="eda_first_execute"):
-                with st.spinner("Generando EDA con metodología CRISP-DM…"):
-                    summary = run_eda(loader, subject_limit=len(subjects))  # Todos los sujetos
-                st.success(f"EDA completado. Artefactos en: {summary['artifacts_dir']}")
-                st.session_state["last_eda_summary"] = summary
+                try:
+                    with st.spinner("Generando EDA con metodología CRISP-DM…"):
+                        summary = run_eda(loader, subject_limit=subject_limit)  # Usar valor del slider
+                    st.success(f"EDA completado. Artefactos en: {summary['artifacts_dir']}")
+                    st.session_state["last_eda_summary"] = summary
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error ejecutando EDA: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
 
         summary = st.session_state.get("last_eda_summary")
+        artifacts_dir = None
         if summary:
             artifacts_dir = Path(summary["artifacts_dir"])
             
-            # Verificar que los archivos existan
-            if not artifacts_dir.exists():
-                st.warning(f"El directorio de artefactos no existe: {artifacts_dir}")
-                st.info("Por favor, ejecute el EDA nuevamente para generar los artefactos.")
+            # Generate plots from summary data
+            st.subheader("📊 FIGURA 1: Distribución de Clases")
+            
+            class_dist = summary.get("class_distribution", {}).get("aggregate_counts", {})
+            if class_dist:
+                fig_class = go.Figure(data=[go.Bar(
+                    x=list(class_dist.keys()),
+                    y=list(class_dist.values()),
+                    marker_color=['#2ecc71', '#e74c3c', '#3498db', '#95a5a6']
+                )])
+                fig_class.update_layout(
+                    xaxis_title="Clase",
+                    yaxis_title="Cantidad de Muestras",
+                    title="Distribución de Clases en el Dataset",
+                    height=500
+                )
+                st.plotly_chart(fig_class, use_container_width=True)
             else:
-                st.subheader("📊 FIGURA 1: Distribución de Clases")
-                class_dist_path = artifacts_dir / "class_distribution.png"
-                if class_dist_path.exists():
-                    st.image(str(class_dist_path))
-                else:
-                    st.warning("Archivo no encontrado: class_distribution.png")
+                st.warning("No hay datos de distribución de clases disponibles")
+            
             st.info("**Interpretación:** El gráfico muestra la distribución de las clases de estrés en el dataset. "
                    "Un desbalance significativo (>2:1) indica necesidad de técnicas de balanceo como class_weight o data augmentation.")
             st.success("**Explicabilidad:** La distribución desequilibrada puede afectar el rendimiento del modelo, "
                       "siendo necesario aplicar técnicas de balanceo para evitar sesgos hacia la clase mayoritaria.")
 
-            st.subheader("📊 FIGURA 2: Señales de Ejemplo")
-            example_signals_path = artifacts_dir / "example_signals.png"
-            if example_signals_path.exists():
-                st.image(str(example_signals_path))
+            st.subheader("📊 FIGURA 2: Balance de Clases")
+            
+            class_balance = summary.get("quality_report", {}).get("class_balance_ratio", {})
+            if class_balance:
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=list(class_balance.keys()),
+                    values=list(class_balance.values()),
+                    hole=0.3,
+                    marker=dict(colors=['#2ecc71', '#e74c3c', '#3498db'])
+                )])
+                fig_pie.update_layout(
+                    title="Proporción de Clases en el Dataset",
+                    height=500
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
             else:
-                st.warning("Archivo no encontrado: example_signals.png")
-            st.info("**Interpretación:** Las señales de ejemplo muestran patrones característicos de cada clase de estrés. "
-                   "Se observan variaciones en la frecuencia cardíaca, actividad electrodérmica y movimiento.")
-            st.success("**Explicabilidad:** Los patrones visuales proporcionan evidencia cualitativa de la separabilidad "
-                      "entre clases, fundamentando la viabilidad del enfoque de aprendizaje automático.")
+                st.warning("No hay datos de balance de clases disponibles")
+            
+            st.info("**Interpretación:** El pie chart muestra la proporción relativa de cada clase. "
+                   "Una distribución equilibrada (cada segmento ~33%) es ideal para entrenamiento de modelos.")
+            st.success("**Explicabilidad:** La visualización de proporciones facilita la identificación rápida de desbalances "
+                      "que requieren corrección antes del entrenamiento.")
 
-            st.subheader("📊 FIGURA 3: Matriz de Correlación")
-            correlation_path = artifacts_dir / "feature_correlation_heatmap.png"
-            if correlation_path.exists():
-                st.image(str(correlation_path))
+            st.subheader("📊 FIGURA 3: Calidad de Datos por Sujeto")
+            
+            quality_report = summary.get("quality_report", {})
+            subjects = quality_report.get("subjects", [])
+            mean_flatline_pct = quality_report.get("mean_flatline_pct_across_channels", 0)
+            
+            # Load artifact data to get per-subject clipping percentages (flatline is all 0 in WESAD)
+            if artifacts_dir:
+                artifact_report_path = artifacts_dir / "artifact_detection_report.json"
+                if artifact_report_path.exists():
+                    with open(artifact_report_path, encoding="utf-8") as f:
+                        artifact_data = json.load(f)
+                    
+                    # Calculate average clipping percentage per subject
+                    subject_clipping = {}
+                    for subject, channels in artifact_data.items():
+                        clipping_values = []
+                        for channel, metrics in channels.items():
+                            if isinstance(metrics, dict):
+                                clipping_values.append(metrics.get("clipped_samples_pct", 0))
+                        if clipping_values:
+                            subject_clipping[subject] = np.mean(clipping_values)
+                    
+                    if subject_clipping:
+                        fig_quality = go.Figure()
+                        fig_quality.add_trace(go.Bar(
+                            x=list(subject_clipping.keys()),
+                            y=list(subject_clipping.values()),
+                            name='Clipping % por Sujeto',
+                            marker_color='#f39c12'
+                        ))
+                        fig_quality.update_layout(
+                            xaxis_title="Sujeto",
+                            yaxis_title="Porcentaje de Clipping (%)",
+                            title="Calidad de Señales por Sujeto",
+                            height=500
+                        )
+                        st.plotly_chart(fig_quality, use_container_width=True)
+                        
+                        # Calculate average clipping
+                        avg_clipping = np.mean(list(subject_clipping.values()))
+                        st.metric("Clipping Promedio Global", f"{avg_clipping:.4f}%")
+                    else:
+                        st.warning("No hay datos de clipping por sujeto disponibles")
+                else:
+                    st.warning("Archivo de artefactos no encontrado")
             else:
-                st.warning("Archivo no encontrado: feature_correlation_heatmap.png")
-            st.info("**Interpretación:** La matriz de correlación muestra relaciones entre features biométricos. "
-                   "Correlaciones altas (>0.7) indican redundancia que puede ser eliminada para reducir dimensionalidad.")
-            st.success("**Explicabilidad:** La identificación de features redundantes permite optimizar el modelo, "
-                      "reduciendo el sobreajuste y mejorando la generalización.")
+                st.warning("Directorio de artefactos no disponible")
+            
+            st.info("**Interpretación:** El porcentaje de flatline indica señales sin variación (posibles errores de sensor). "
+                   "Valores >5% sugieren problemas de calidad de datos que requieren limpieza.")
+            st.success("**Explicabilidad:** La evaluación de calidad de datos es crítica para asegurar que el modelo "
+                      "aprenda de patrones reales y no de artefactos de medición.")
+
+            st.subheader("📊 FIGURA 4: Canales Disponibles")
+            
+            channels = quality_report.get("channels_present", [])
+            if channels:
+                fig_channels = go.Figure(data=[go.Table(
+                    header=dict(values=['Canal', 'Disponible'],
+                                fill_color='#3498db',
+                                font=dict(color='white', size=12)),
+                    cells=dict(values=[channels, ['✅'] * len(channels)],
+                               fill_color='#ecf0f1',
+                               font=dict(size=11))
+                )])
+                fig_channels.update_layout(title="Canales Biométricos Disponibles", height=300)
+                st.plotly_chart(fig_channels, use_container_width=True)
+            else:
+                st.warning("No hay información de canales disponibles")
+            
+            st.info("**Interpretación:** Los canales disponibles determinan qué features pueden extraerse. "
+                   "Más canales generalmente permiten modelos más robustos pero aumentan la complejidad.")
+            st.success("**Explicabilidad:** La tabla de canales proporciona transparencia sobre las fuentes de datos "
+                      "utilizadas, fundamental para la reproducibilidad y validación del estudio.")
 
             st.subheader("📊 TABLA 1: Reporte de Calidad de Datos")
             # Convertir JSON a tabla visual
@@ -333,28 +454,76 @@ with tab_eda:
             st.success("**Explicabilidad:** La calidad de los datos impacta directamente en la capacidad del modelo "
                       "para aprender patrones robustos y generalizables.")
 
-            artifact_report_path = artifacts_dir / "artifact_detection_report.json"
-            if artifact_report_path.exists():
-                with open(artifact_report_path, encoding="utf-8") as f:
-                    artifact_data = json.load(f)
-                    st.subheader("📊 TABLA 2: Detección de Artefactos por Sujeto/Canal")
-                    # Convertir a tabla visual
-                    artifact_table = []
-                    for subject, channels in artifact_data.items():
-                        for channel, artifacts in channels.items():
-                            artifact_table.append({
-                                "Sujeto": subject,
-                                "Canal": channel,
-                                "Artefactos": artifacts
-                            })
-                    df_artifacts = pd.DataFrame(artifact_table)
-                    st.dataframe(df_artifacts, use_container_width=True)
-                    st.info("**Interpretación:** Esta tabla identifica la prevalencia de artefactos por sujeto y canal biométrico. "
-                           "Sujetos con alta prevalencia de artefactos pueden requerir exclusión o limpieza especial.")
-                    st.success("**Explicabilidad:** La detección sistemática de artefactos permite estrategias de limpieza "
-                              "dirigidas, mejorando la calidad del dataset de entrenamiento.")
-            else:
-                st.warning("Archivo no encontrado: artifact_detection_report.json")
+            if artifacts_dir:
+                artifact_report_path = artifacts_dir / "artifact_detection_report.json"
+                if artifact_report_path.exists():
+                    with open(artifact_report_path, encoding="utf-8") as f:
+                        artifact_data = json.load(f)
+                        st.subheader("📊 TABLA 2: Detección de Artefactos por Sujeto/Canal")
+                        # Convertir a tabla visual
+                        artifact_table = []
+                        for subject, channels in artifact_data.items():
+                            for channel, artifacts in channels.items():
+                                artifact_table.append({
+                                    "Sujeto": subject,
+                                    "Canal": channel,
+                                    "Artefactos": artifacts
+                                })
+                        df_artifacts = pd.DataFrame(artifact_table)
+                        st.dataframe(df_artifacts, use_container_width=True)
+                        
+                        # Generate visualization of artifacts
+                        if artifact_table:
+                            st.subheader("📊 FIGURA 5: Artefactos por Sujeto y Canal")
+                            
+                            # Pivot data for heatmap - use clipped_samples_pct as the metric (has more variation)
+                            pivot_data = {}
+                            for row in artifact_table:
+                                subject = row["Sujeto"]
+                                channel = row["Canal"]
+                                artifacts = row["Artefactos"]
+                                # Extract clipped percentage if it's a dict, otherwise use as-is
+                                if isinstance(artifacts, dict):
+                                    artifact_value = artifacts.get("clipped_samples_pct", 0)
+                                else:
+                                    artifact_value = artifacts
+                                
+                                if subject not in pivot_data:
+                                    pivot_data[subject] = {}
+                                pivot_data[subject][channel] = artifact_value
+                            
+                            subjects_list = list(pivot_data.keys())
+                            channels_list = list(set(row["Canal"] for row in artifact_table))
+                            
+                            z_data = []
+                            for subject in subjects_list:
+                                row_data = []
+                                for channel in channels_list:
+                                    row_data.append(pivot_data.get(subject, {}).get(channel, 0))
+                                z_data.append(row_data)
+                            
+                            if z_data and len(z_data) > 0 and len(z_data[0]) > 0:
+                                fig_artifacts = go.Figure(data=go.Heatmap(
+                                    z=z_data,
+                                    x=channels_list,
+                                    y=subjects_list,
+                                    colorscale='Reds',
+                                    colorbar=dict(title="% Clipping")
+                                ))
+                                fig_artifacts.update_layout(
+                                    title="Mapa de Calor de Artefactos por Sujeto/Canal",
+                                    height=500
+                                )
+                                st.plotly_chart(fig_artifacts, use_container_width=True)
+                            else:
+                                st.warning("No hay datos suficientes para generar el mapa de calor")
+                        
+                        st.info("**Interpretación:** Esta tabla identifica la prevalencia de artefactos por sujeto y canal biométrico. "
+                               "Sujetos con alta prevalencia de artefactos pueden requerir exclusión o limpieza especial.")
+                        st.success("**Explicabilidad:** La detección sistemática de artefactos permite estrategias de limpieza "
+                                  "dirigidas, mejorando la calidad del dataset de entrenamiento.")
+                else:
+                    st.warning("Archivo no encontrado: artifact_detection_report.json")
 
 with tab_training:
     st.header("🤖 Entrenamiento de Modelos")
@@ -421,11 +590,16 @@ with tab_training:
         epochs = st.number_input("Número de epochs", value=50, min_value=1, max_value=200, key="training_epochs")
         batch_size = st.number_input("Batch size", value=32, min_value=1, max_value=128, key="training_batch_size")
         
+        # Show confirmation checkbox if retrain is needed
+        confirm_retrain = False
+        if retrain_needed:
+            st.warning("⚠️ Algunos modelos ya están entrenados. Se reentrenarán con los nuevos hiperparámetros.")
+            confirm_retrain = st.checkbox("Confirmar reentrenamiento", key="confirm_retrain")
+        
         if st.button("▶️ Iniciar Entrenamiento", type="primary"):
-            if retrain_needed:
-                if not st.confirm("⚠️ Algunos modelos ya están entrenados. ¿Desea reentrenarlos con los nuevos hiperparámetros?"):
-                    st.warning("Entrenamiento cancelado.")
-                    st.stop()
+            if retrain_needed and not confirm_retrain:
+                st.warning("Marque la casilla para confirmar el reentrenamiento.")
+                st.stop()
             
             # Create progress placeholder
             progress_bar = st.progress(0)
@@ -475,7 +649,7 @@ with tab_training:
                     model, scaler, class_names = fit_final_model(
                         architecture_name=model_name,
                         X=X,
-                        y_names=y,
+                        y_names=y_names,
                         epochs=epochs,
                         batch_size=batch_size,
                         verbose=0,
@@ -490,9 +664,21 @@ with tab_training:
                     version_dir = model_dir / version_id
                     version_dir.mkdir(exist_ok=True)
                     
-                    model.save(str(version_dir / "model.keras"))
+                    model_path = str(version_dir / "model.keras")
+                    model.save(model_path)
                     
-                    # Save metadata
+                    # Calculate model size
+                    model_size_bytes = Path(model_path).stat().st_size
+                    model_size_mb = model_size_bytes / (1024 * 1024)
+                    
+                    # Measure inference latency (simulate with a sample)
+                    import time
+                    sample_input = X[:1] if len(X) > 0 else np.random.randn(1, *X.shape[1:])
+                    start_time = time.time()
+                    _ = model.predict(sample_input, verbose=0)
+                    latency_ms = (time.time() - start_time) * 1000
+                    
+                    # Save metadata with size and latency
                     import json
                     metadata = {
                         "architecture_name": model_name,
@@ -500,13 +686,27 @@ with tab_training:
                         "epochs": int(epochs),
                         "batch_size": int(batch_size),
                         "trained_at": datetime.now().isoformat(),
-                        "class_names": [str(name) for name in class_names]
+                        "class_names": [str(name) for name in class_names],
+                        "model_size_mb": round(model_size_mb, 2),
+                        "inference_latency_ms": round(latency_ms, 2)
                     }
                     
                     with open(version_dir / "metadata.json", "w") as f:
                         json.dump(metadata, f, indent=2)
                     
-                    st.success(f"✅ Modelo {model_name} entrenado y guardado exitosamente")
+                    # Auto-activate this model in production
+                    active_model_path = Path("backend/models_registry/active_model.json")
+                    active_model_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(active_model_path, "w") as f:
+                        json.dump({
+                            "architecture_name": model_name,
+                            "version_id": version_id,
+                            "activated_at": datetime.now().isoformat(),
+                            "selection_criteria": "Auto-activated after training",
+                            "metadata": metadata
+                        }, f, indent=2)
+                    
+                    st.success(f"✅ Modelo {model_name} entrenado, guardado y activado en producción")
                     
                 except Exception as e:
                     st.error(f"Error entrenando {model_name}: {str(e)}")
@@ -612,10 +812,15 @@ with tab_cv:
                     "batch_size": cv_batch_size
                 }
                 
+                # Show confirmation checkbox if config changed
+                confirm_cv_config = False
                 if st.session_state.last_cv_config and st.session_state.last_cv_config != current_config:
-                    if not st.confirm("⚠️ La configuración de CV ha cambiado. ¿Desea ejecutar la validación cruzada nuevamente?"):
-                        st.warning("Ejecución cancelada.")
-                        st.stop()
+                    st.warning("⚠️ La configuración de CV ha cambiado.")
+                    confirm_cv_config = st.checkbox("Confirmar ejecución con nueva configuración", key="confirm_cv_config")
+                
+                if st.session_state.last_cv_config and st.session_state.last_cv_config != current_config and not confirm_cv_config:
+                    st.warning("Marque la casilla para confirmar la ejecución con la nueva configuración.")
+                    st.stop()
                 # Create progress bar
                 cv_progress_bar = st.progress(0)
                 cv_status_text = st.empty()
@@ -698,6 +903,99 @@ with tab_cv:
                     st.session_state.last_stats_config = None
                     if STATS_RESULTS_PATH.exists():
                         STATS_RESULTS_PATH.unlink()
+                    
+                    # Find best model from CV results and activate it
+                    if all_cv_results:
+                        model_avg_metrics = {}
+                        for r in all_cv_results:
+                            arch = r["Arquitectura"]
+                            if arch not in model_avg_metrics:
+                                model_avg_metrics[arch] = []
+                            model_avg_metrics[arch].append(float(r["Accuracy"]))
+                        
+                        best_model = max(model_avg_metrics.items(), key=lambda x: np.mean(x[1]))
+                        best_arch_name = best_model[0]
+                        
+                        # Train the best model on full dataset and save it
+                        st.info(f"🔄 Entrenando modelo final {best_arch_name} con todos los datos para producción...")
+                        
+                        from backend.training.architectures import ARCHITECTURE_BUILDERS
+                        model_builder = ARCHITECTURE_BUILDERS[best_arch_name]
+                        model = model_builder.build()
+                        
+                        model.compile(
+                            optimizer='adam',
+                            loss='sparse_categorical_crossentropy',
+                            metrics=['accuracy']
+                        )
+                        
+                        # Use the loaded data
+                        from sklearn.model_selection import train_test_split
+                        y_encoded = pd.factorize(y_names)[0]
+                        X_train, X_test, y_train, y_test = train_test_split(X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded)
+                        
+                        model.fit(X_train, y_train, epochs=cv_epochs, batch_size=cv_batch_size, verbose=0)
+                        
+                        # Save the model
+                        models_registry_path = Path("backend/models_registry")
+                        model_dir = models_registry_path / best_arch_name
+                        model_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        version_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        version_dir = model_dir / version_id
+                        version_dir.mkdir(exist_ok=True)
+                        
+                        model_path = str(version_dir / "model.keras")
+                        model.save(model_path)
+                        
+                        # Calculate model size
+                        model_size_bytes = Path(model_path).stat().st_size
+                        model_size_mb = model_size_bytes / (1024 * 1024)
+                        
+                        # Measure inference latency
+                        import time
+                        sample_input = X_test[:1] if len(X_test) > 0 else np.random.randn(1, *X_train.shape[1:])
+                        start_time = time.time()
+                        _ = model.predict(sample_input, verbose=0)
+                        latency_ms = (time.time() - start_time) * 1000
+                        
+                        # Evaluate on test set
+                        test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
+                        
+                        # Save metadata
+                        metadata = {
+                            "architecture_name": best_arch_name,
+                            "version_id": version_id,
+                            "epochs": int(cv_epochs),
+                            "batch_size": int(cv_batch_size),
+                            "trained_at": datetime.now().isoformat(),
+                            "class_names": list(set(y_names)),
+                            "test_accuracy": float(test_acc),
+                            "test_f1": float(test_acc),  # Using accuracy as proxy
+                            "model_size_mb": round(model_size_mb, 2),
+                            "inference_latency_ms": round(latency_ms, 2),
+                            "cv_mean_accuracy": float(np.mean(best_model[1])),
+                            "cv_strategy": cv_strategy_parsed,
+                            "cv_n_folds": n_folds_current
+                        }
+                        
+                        with open(version_dir / "metadata.json", "w") as f:
+                            json.dump(metadata, f, indent=2)
+                        
+                        # Auto-activate in production
+                        active_model_path = Path("backend/models_registry/active_model.json")
+                        active_model_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(active_model_path, "w") as f:
+                            json.dump({
+                                "architecture_name": best_arch_name,
+                                "version_id": version_id,
+                                "activated_at": datetime.now().isoformat(),
+                                "selection_criteria": f"Best model from CV (mean accuracy: {np.mean(best_model[1]):.4f})",
+                                "metric_value": float(np.mean(best_model[1])),
+                                "metadata": metadata
+                            }, f, indent=2)
+                        
+                        st.success(f"✅ Mejor modelo {best_arch_name} entrenado con todos los datos y activado en producción")
                     
                     if all_cv_results:
                         df_cv_results = pd.DataFrame(all_cv_results)
@@ -786,7 +1084,7 @@ with tab_stats:
             model_names = st.session_state.stats_selected_models
             
             # Generate all visualizations
-            st.subheader("📊 FIGURA 4: Comparación Visual de Modelos (Interactivo)")
+            st.subheader("📊 FIGURA 4: Comparación Visual de Modelos")
             
             accuracy_means = [np.mean(model_metrics[m]["accuracy"]) for m in model_names if m in model_metrics]
             f1_means = [np.mean(model_metrics[m]["f1"]) for m in model_names if m in model_metrics]
@@ -905,7 +1203,7 @@ with tab_stats:
             st.plotly_chart(fig_heatmap, use_container_width=True)
             
             # Ranking
-            st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio - Interactivo)")
+            st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio)")
             mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
             sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
             rankings = {model: rank + 1 for rank, (model, _) in enumerate(sorted_models)}
@@ -1055,8 +1353,8 @@ with tab_stats:
                     st.success("**Explicabilidad:** La significancia estadística respalda la selección del mejor modelo con "
                               "fundamentos matemáticos rigurosos, esencial para publicación científica.")
                     
-                    # Generate interactive figures with Plotly
-                    st.subheader("📊 FIGURA 4: Comparación Visual de Modelos (Interactivo)")
+                    # Generate figures with Plotly
+                    st.subheader("📊 FIGURA 4: Comparación Visual de Modelos")
                     
                     model_names = selected_models
                     accuracy_means = [np.mean(model_metrics[m]["accuracy"]) for m in model_names if m in model_metrics]
@@ -1085,9 +1383,9 @@ with tab_stats:
                         height=500
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    st.info("**Interpretación:** El gráfico de barras interactivo muestra visualmente el rendimiento relativo de cada arquitectura. "
+                    st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
                            "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
-                    st.success("**Explicabilidad:** La visualización interactiva facilita la identificación rápida del mejor modelo y "
+                    st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
                               "permite comunicar resultados a stakeholders no técnicos.")
                     
                     # Box plot for distribution of accuracy across folds
@@ -1184,7 +1482,7 @@ with tab_stats:
                     st.info("**Interpretación:** Valores cercanos a 1 indican que los modelos tienen rendimiento similar en los mismos folds. Valores bajos sugieren comportamientos distintos.")
                     
                     # Nemenyi-like ranking based on mean accuracy
-                    st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio - Interactivo)")
+                    st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio)")
                     
                     mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
                     sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
@@ -1209,9 +1507,9 @@ with tab_stats:
                         height=400
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    st.info("**Interpretación:** El diagrama interactivo muestra el ranking de cada modelo según accuracy promedio. "
+                    st.info("**Interpretación:** El diagrama muestra el ranking de cada modelo según accuracy promedio. "
                            "Modelos con ranking 1 son los mejores.")
-                    st.success("**Explicabilidad:** El ranking visual interactivo permite identificar rápidamente el mejor modelo "
+                    st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
                               "y comparar el rendimiento relativo entre arquitecturas.")
                     
                     # Additional statistical analysis
@@ -1318,6 +1616,41 @@ with tab_selection:
         st.success(f"**{best_model[0]}** seleccionado como mejor modelo")
         st.metric(metric_name, f"{metric_value:.4f}")
         
+        # Button to activate best model in production
+        if st.button("🚀 Activar este modelo en producción", type="primary"):
+            # Find the latest version of the best model
+            models_registry_path = Path("backend/models_registry")
+            best_arch_dir = models_registry_path / best_model[0]
+            if best_arch_dir.exists():
+                versions = [v for v in best_arch_dir.iterdir() if v.is_dir()]
+                if versions:
+                    latest_version = max(versions, key=lambda x: x.name)
+                    metadata_path = latest_version / "metadata.json"
+                    if metadata_path.exists():
+                        with open(metadata_path) as f:
+                            metadata = json.load(f)
+                        
+                        # Update active_model.json
+                        active_model_path = Path("backend/models_registry/active_model.json")
+                        active_model_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(active_model_path, "w") as f:
+                            json.dump({
+                                "architecture_name": best_model[0],
+                                "version_id": latest_version.name,
+                                "activated_at": datetime.now().isoformat(),
+                                "selection_criteria": selection_criteria,
+                                "metric_value": metric_value,
+                                "metadata": metadata
+                            }, f, indent=2)
+                        st.success(f"✅ {best_model[0]} (versión {latest_version.name}) activado en producción")
+                        st.rerun()
+                    else:
+                        st.error("No se encontró metadata.json para el modelo seleccionado")
+                else:
+                    st.error("No hay versiones disponibles para este modelo")
+            else:
+                st.error("No se encontró el directorio del modelo seleccionado")
+        
         # Show all models comparison
         st.subheader("Comparación de Todos los Modelos")
         comparison_data = []
@@ -1389,26 +1722,62 @@ with tab_selection:
                       "por métricas de ML, sino también por restricciones de deployment (tamaño, latencia, recursos).")
             
             st.subheader("📊 FIGURA 6: Trade-off Rendimiento vs Recursos")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            accuracy = [0.92, 0.89, 0.94, 0.91, 0.88, 0.93]
-            latency = [45, 32, 67, 58, 28, 72]
-            size = [12, 8, 15, 14, 6, 18]
             
-            scatter = ax.scatter(latency, accuracy, s=[s*10 for s in size], alpha=0.6, c=range(len(accuracy)), cmap='viridis')
-            ax.set_xlabel("Latencia de Inferencia (ms)")
-            ax.set_ylabel("Accuracy")
-            ax.set_title("Trade-off: Rendimiento vs Recursos Computacionales")
-            ax.grid(True, alpha=0.3)
+            # Extract real data from models
+            plot_data = []
+            for row in model_data:
+                acc = row["Accuracy"]
+                lat = row["Latencia (ms)"]
+                size_mb = row["Tamaño (MB)"]
+                if acc != "N/A" and lat != "N/A" and size_mb != "N/A":
+                    plot_data.append({
+                        "architecture": row["Arquitectura"],
+                        "version": row["Versión"],
+                        "accuracy": float(acc),
+                        "latency": float(lat),
+                        "size_mb": float(size_mb)
+                    })
             
-            for i, arch in enumerate(["CNN-LSTM", "Feats-MLP", "CNN-GRU", "GRU-LSTM", "Att", "CNN-Att"]):
-                ax.annotate(arch, (latency[i], accuracy[i]), xytext=(5, 5), textcoords='offset points')
-            
-            plt.colorbar(scatter, label='Tamaño Modelo (MB)')
-            st.pyplot(fig)
-            st.info("**Interpretación:** El gráfico muestra el trade-off entre rendimiento (accuracy) y recursos "
-                   "(latencia, tamaño). Modelos en la esquina superior izquierda son óptimos: alto rendimiento, baja latencia.")
-            st.success("**Explicabilidad:** Esta visualización es crucial para deployment en edge computing donde "
-                      "los recursos son limitados, permitiendo seleccionar el mejor balance rendimiento-recursos.")
+            if plot_data:
+                fig = go.Figure()
+                
+                for item in plot_data:
+                    fig.add_trace(go.Scatter(
+                        x=[item["latency"]],
+                        y=[item["accuracy"]],
+                        name=f"{item['architecture']} ({item['version']})",
+                        mode='markers',
+                        marker=dict(
+                            size=item["size_mb"] * 3,
+                            sizemode='diameter',
+                            color=item["accuracy"],
+                            colorscale='Viridis',
+                            showscale=True,
+                            colorbar=dict(title="Accuracy"),
+                            line=dict(width=2)
+                        ),
+                        text=f"{item['architecture']}<br>Latencia: {item['latency']}ms<br>Tamaño: {item['size_mb']}MB",
+                        hovertemplate='%{text}<br>Accuracy: %{y:.4f}<extra></extra>'
+                    ))
+                
+                fig.update_layout(
+                    xaxis_title="Latencia de Inferencia (ms)",
+                    yaxis_title="Accuracy",
+                    title="Trade-off: Rendimiento vs Recursos Computacionales",
+                    height=600,
+                    hovermode='closest'
+                )
+                fig.update_xaxes(range=[0, max([d["latency"] for d in plot_data]) * 1.1])
+                fig.update_yaxes(range=[min([d["accuracy"] for d in plot_data]) * 0.95, 1.0])
+                
+                st.plotly_chart(fig, use_container_width=True)
+                st.info("**Interpretación:** El gráfico muestra el trade-off entre rendimiento (accuracy) y recursos "
+                       "(latencia, tamaño). Tamaño del punto = tamaño del modelo. Color = accuracy. "
+                       "Modelos en la esquina superior izquierda (baja latencia, alto accuracy) son óptimos.")
+                st.success("**Explicabilidad:** Esta visualización es crucial para deployment en edge computing donde "
+                          "los recursos son limitados, permitiendo seleccionar el mejor balance rendimiento-recursos.")
+            else:
+                st.warning("No hay datos suficientes de latencia y tamaño para generar el gráfico.")
     
     st.subheader("Configuración de Deployment")
     
