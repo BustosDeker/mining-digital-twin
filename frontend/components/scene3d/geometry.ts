@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+export const WORLD_SCALE = 0.12;
+
 /**
  * Convierte una posición del backend (x, y, z_nivel_profundidad en metros)
  * a coordenadas Three.js (Y arriba). El backend usa z negativo = más
@@ -11,7 +13,7 @@ export function backendToThreePosition(
   position: [number, number, number]
 ): [number, number, number] {
   const [x, y, z] = position;
-  const scale = 0.12; // compacta el layout (decenas de metros) a una escena manejable
+  const scale = WORLD_SCALE;
   return [x * scale, z * scale, y * scale];
 }
 
@@ -22,6 +24,25 @@ export interface CylinderTransform {
 }
 
 const _up = new THREE.Vector3(0, 1, 0);
+
+/** Local Z follows the edge, local Y stays upright, including vertical shafts. */
+export function galleryBetween(a: [number, number, number], b: [number, number, number]) {
+  const start = new THREE.Vector3(...a);
+  const end = new THREE.Vector3(...b);
+  const forward = end.clone().sub(start);
+  const length = forward.length();
+  forward.normalize();
+  if (length < 1e-6) forward.set(0, 0, 1);
+  const reference = Math.abs(forward.y) > 0.99
+    ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+  const right = reference.clone().cross(forward).normalize();
+  const up = forward.clone().cross(right).normalize();
+  return {
+    position: start.add(end).multiplyScalar(0.5).toArray() as [number, number, number],
+    quaternion: new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, forward)),
+    length,
+  };
+}
 
 /** Orienta un CylinderGeometry (alineado por defecto al eje Y) para que
  * conecte el punto `a` con el punto `b`. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import type { CreateSessionInput, HazardType } from "@/lib/types";
 
@@ -30,6 +30,7 @@ function NumberField({
       {label}
       <input
         type="number"
+        required
         value={value}
         min={min}
         max={max}
@@ -60,10 +61,21 @@ export function ScenarioLauncherPanel({
   const [seed, setSeed] = useState(42);
   const [submitting, setSubmitting] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+  const dialog = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.current?.querySelector<HTMLInputElement>("input")?.focus();
+    return () => previous?.focus();
+  }, [open]);
+
   if (!open) return null;
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    setError(null);
     try {
       await onLaunch({
         scenario_name: scenarioName,
@@ -81,22 +93,34 @@ export function ScenarioLauncherPanel({
         },
       });
       onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t.common.error);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-void/70">
-      <div className="w-[440px] rounded border border-hairline bg-panel p-5">
-        <h2 className="mb-4 text-[13px] font-semibold uppercase tracking-wide text-steel2">
+    <div className="twin-modal absolute inset-0 z-20 flex items-center justify-center bg-void/70">
+      <form ref={dialog} role="dialog" aria-modal="true" aria-labelledby="scenario-title"
+        onSubmit={e => { e.preventDefault(); if (!submitting) void handleSubmit(); }}
+        onKeyDown={e => {
+          if (e.key === "Escape" && !submitting) onClose();
+          if (e.key !== "Tab") return;
+          const fields = Array.from(dialog.current?.querySelectorAll<HTMLElement>('input, select, button:not(:disabled)') ?? []);
+          const first = fields[0], last = fields[fields.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+          if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        }} className="w-[440px] max-w-full max-h-full overflow-y-auto rounded border border-hairline bg-panel p-5">
+        <h2 id="scenario-title" className="mb-4 text-[13px] font-semibold uppercase tracking-wide text-steel2">
           {t.scenario.title}
         </h2>
 
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-[11px] text-steel">
-            Nombre del escenario
+            {t.twin.scenarioName}
             <input
+              required
               value={scenarioName}
               onChange={(e) => setScenarioName(e.target.value)}
               className="rounded-sm border border-hairline bg-panel2 px-2 py-1 font-mono text-[12px] text-steel2 outline-none focus:border-signal/50"
@@ -166,22 +190,25 @@ export function ScenarioLauncherPanel({
           </div>
         </div>
 
+        {error && <p role="alert" className="mt-3 text-sm text-red">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button
+            type="button"
+            disabled={submitting}
             onClick={onClose}
             className="rounded-sm border border-hairline px-3 py-1.5 text-[12px] text-steel hover:text-steel2"
           >
             {t.common.close}
           </button>
           <button
-            onClick={handleSubmit}
+            type="submit"
             disabled={submitting}
             className="rounded-sm border border-signal/40 px-3 py-1.5 text-[12px] font-medium text-signal hover:bg-signal/10 disabled:opacity-50"
           >
             {submitting ? t.common.loading : t.scenario.launch}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

@@ -1,6 +1,42 @@
 export type Locale = "es" | "en";
 
 export interface TranslationShape {
+  twin: {
+    operations: string;
+    liveGeometry: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    fit: string;
+    cancelFollow: string;
+    follow: string;
+    selectWorker: string;
+    worker: string;
+    panic: string;
+    waiting: string;
+    distance: string;
+    capacity: string;
+    width: string;
+    length: string;
+    slope: string;
+    risk: string;
+    affected: string;
+    navigation: string;
+    opacityHint: string;
+    routesHint: string;
+    webglError: string;
+    webglHelp: string;
+    retry: string;
+    scenarioName: string;
+    simulation: string;
+    visualization: string;
+    selected: string;
+    depth: string;
+    infrastructure: string;
+    noSelection: string;
+    status: string;
+    inspect: string;
+    cutaway: string;
+  };
   appTitle: string;
   nav: {
     digitalTwin: string;
@@ -124,6 +160,42 @@ export interface TranslationShape {
 
 export const translations: Record<Locale, TranslationShape> = {
   es: {
+    twin: {
+      operations: "Centro de control minero",
+      liveGeometry: "Topología recibida del simulador",
+      emptyTitle: "Preparar la operación",
+      emptyDescription: "Crea un escenario para visualizar la mina, sus trabajadores y las condiciones de evacuación.",
+      fit: "Encuadrar mina",
+      cancelFollow: "Cancelar seguimiento",
+      follow: "Seguir trabajador",
+      selectWorker: "Seleccionar trabajador",
+      worker: "Trabajador",
+      panic: "Pánico",
+      waiting: "En espera",
+      distance: "Distancia recorrida",
+      capacity: "Capacidad",
+      width: "Ancho",
+      length: "Longitud",
+      slope: "Pendiente",
+      risk: "Riesgo actual",
+      affected: "Galerías afectadas",
+      navigation: "Arrastrar: rotar · Botón derecho: mover · Rueda: zoom",
+      opacityHint: "Opacidad de la envolvente de roca; las señales permanecen visibles.",
+      routesHint: "Tramos ocupados recibidos del simulador; no representa rutas futuras.",
+      webglError: "No se pudo inicializar WebGL",
+      webglHelp: "Abre esta misma dirección en un navegador con WebGL habilitado.",
+      retry: "Reintentar",
+      scenarioName: "Nombre del escenario",
+      simulation: "Simulación",
+      visualization: "Visualización",
+      selected: "Selección",
+      depth: "Cota",
+      infrastructure: "Infraestructura",
+      noSelection: "Selecciona una galería o señal para inspeccionar sus datos.",
+      status: "Estado",
+      inspect: "Inspección",
+      cutaway: "Sección abierta · Dimensiones en metros",
+    },
     appTitle: "Gemelo Digital de Evacuación Minera",
     nav: {
       digitalTwin: "Gemelo Digital",
@@ -245,6 +317,42 @@ export const translations: Record<Locale, TranslationShape> = {
     },
   },
   en: {
+    twin: {
+      operations: "Mining operations center",
+      liveGeometry: "Topology received from the simulator",
+      emptyTitle: "Prepare the operation",
+      emptyDescription: "Create a scenario to view the mine, its workers and evacuation conditions.",
+      fit: "Fit mine",
+      cancelFollow: "Stop following",
+      follow: "Follow worker",
+      selectWorker: "Select worker",
+      worker: "Worker",
+      panic: "Panic",
+      waiting: "Waiting",
+      distance: "Distance traveled",
+      capacity: "Capacity",
+      width: "Width",
+      length: "Length",
+      slope: "Slope",
+      risk: "Current risk",
+      affected: "Affected galleries",
+      navigation: "Drag: orbit · Right button: pan · Wheel: zoom",
+      opacityHint: "Rock envelope opacity; safety signals remain visible.",
+      routesHint: "Occupied segments received from the simulator; does not show future routes.",
+      webglError: "Unable to initialize WebGL",
+      webglHelp: "Open this same address in a browser with WebGL enabled.",
+      retry: "Retry",
+      scenarioName: "Scenario name",
+      simulation: "Simulation",
+      visualization: "Visualization",
+      selected: "Selection",
+      depth: "Elevation",
+      infrastructure: "Infrastructure",
+      noSelection: "Select a gallery or sign to inspect its data.",
+      status: "Status",
+      inspect: "Inspection",
+      cutaway: "Cutaway view · Dimensions in meters",
+    },
     appTitle: "Mine Evacuation Digital Twin",
     nav: {
       digitalTwin: "Digital Twin",

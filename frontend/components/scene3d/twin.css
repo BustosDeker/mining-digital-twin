@@ -1,0 +1,73 @@
+/* Scoped to the Digital Twin tab. Other modules retain their existing theme. */
+.twin-workspace {
+  --twin-bg: #101820; --twin-panel: #17222b; --twin-raised: #1d2c36;
+  --twin-line: #30414d; --twin-ink: #e2e9ec; --twin-muted: #9aadb8;
+  --twin-safe: #79c6a6; --twin-blue: #83bfe5; --twin-amber: #e4b366; --twin-red: #ef8982;
+  color: var(--twin-ink); background: var(--twin-bg); color-scheme: dark;
+}
+.twin-workspace[data-theme="light"] {
+  --twin-bg: #dce3e7; --twin-panel: #f3f6f7; --twin-raised: #e7edef;
+  --twin-line: #bccbd2; --twin-ink: #213640; --twin-muted: #526b77;
+  --twin-safe: #21684d; --twin-blue: #216b97; --twin-amber: #825612; --twin-red: #b43832;
+  color-scheme: light;
+}
+.twin-workspace .bg-panel { background: var(--twin-panel); }
+.twin-workspace .bg-panel2 { background: var(--twin-raised); }
+.twin-workspace .border-hairline { border-color: var(--twin-line); }
+.twin-workspace .text-steel { color: var(--twin-muted); }
+.twin-workspace .text-steel2 { color: var(--twin-ink); }
+.twin-workspace .text-signal { color: var(--twin-safe); }
+.twin-workspace .text-amber { color: var(--twin-amber); }
+.twin-workspace .text-red { color: var(--twin-red); }
+.twin-workspace input { accent-color: var(--twin-safe); }
+.twin-workspace button:focus-visible, .twin-workspace input:focus-visible, .twin-workspace select:focus-visible {
+  outline: 2px solid var(--twin-blue); outline-offset: 3px;
+}
+.twin-workspace button { transition: background 120ms, color 120ms; }
+.twin-workspace button:disabled { cursor: not-allowed; opacity: .45; }
+.twin-eyebrow { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .13em; color: var(--twin-muted); }
+.twin-controls { row-gap: 8px; flex-shrink: 0; }
+.twin-controls .twin-eyebrow { font-size: 9px; }
+.twin-viewbar { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 9px 16px; background: var(--twin-panel); border-bottom: 1px solid var(--twin-line); font-size: 11px; }
+.twin-viewbar button { padding: 5px 9px; border: 1px solid transparent; border-radius: 3px; color: var(--twin-muted); }
+.twin-viewbar button:hover { background: var(--twin-raised); color: var(--twin-ink); }
+.twin-viewbar button[aria-pressed="true"] { background: var(--twin-raised); border-color: var(--twin-line); color: var(--twin-ink); }
+.twin-viewbar select, .twin-worker-select select { border: 1px solid var(--twin-line); background: var(--twin-raised); border-radius: 3px; padding: 4px 6px; }
+.twin-divider { width: 1px; height: 18px; background: var(--twin-line); margin: 0 8px; }
+.twin-map-caption { position: absolute; top: 19px; left: 20px; display: flex; flex-direction: column; gap: 5px; pointer-events: none; }
+.twin-map-caption strong { font-size: 12px; font-weight: 400; color: var(--twin-muted); }
+.twin-levels { position: absolute; top: 84px; left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.twin-levels button { min-width: 90px; text-align: left; background: var(--twin-panel); border: 1px solid var(--twin-line); border-left: 2px solid var(--twin-muted); padding: 7px 10px; border-radius: 3px; }
+.twin-levels button[aria-pressed="true"] { border-left-color: var(--twin-blue); background: var(--twin-raised); }
+.twin-levels span { display: block; font-size: 11px; }
+.twin-levels small { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--twin-muted); }
+.twin-inspector { position: absolute; bottom: 46px; right: 16px; width: 226px; max-height: 65%; overflow-y: auto; background: var(--twin-panel); border: 1px solid var(--twin-line); border-radius: 4px; padding: 12px; box-shadow: 0 6px 20px #0002; }
+.twin-inspector strong { display: block; font-size: 12px; font-weight: 500; margin-top: 8px; }
+.twin-inspector p { font-size: 11px; line-height: 1.5; color: var(--twin-muted); margin: 7px 0; }
+.twin-inspector dl { display: grid; grid-template-columns: 1fr auto; gap: 6px; font-size: 11px; margin: 10px 0; }
+.twin-inspector dt { color: var(--twin-muted); }
+.twin-inspector dd { font-family: 'IBM Plex Mono', monospace; }
+.twin-worker-select { display: flex; flex-direction: column; gap: 5px; padding-top: 9px; margin-top: 8px; border-top: 1px solid var(--twin-line); font-size: 10px; color: var(--twin-muted); }
+.twin-worker-select select { color: var(--twin-ink); font-size: 11px; }
+.twin-action { border: 1px solid var(--twin-line); padding: 6px 10px; font-size: 11px; width: 100%; background: var(--twin-raised); }
+.twin-follow { position: absolute; top: 16px; right: 16px; background: var(--twin-panel); color: var(--twin-blue); border: 1px solid var(--twin-blue); padding: 8px 12px; font-size: 11px; border-radius: 3px; }
+.twin-scene-footer { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; padding: 10px 18px; font-size: 10px; color: var(--twin-muted); pointer-events: none; gap: 20px; }
+.twin-scene-label { pointer-events: none; white-space: nowrap; border-left: 2px solid; padding: 3px 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--twin-ink); background: var(--twin-panel); border-radius: 2px; box-shadow: 0 1px 8px #0003; }
+.twin-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.twin-stat { padding: 10px; background: var(--twin-raised); border: 1px solid var(--twin-line); border-radius: 3px; display: flex; flex-direction: column; gap: 4px; }
+.twin-stat > span:first-child { font-size: 11px; }
+.twin-stat > span:last-child { font-size: 25px; line-height: 1.2; }
+.twin-event { border: 1px solid var(--twin-line); border-left: 3px solid var(--twin-amber); padding: 10px; border-radius: 3px; background: var(--twin-raised); font-size: 11px; }
+.twin-event[data-hazard="fire"] { border-left-color: var(--twin-red); }
+.twin-event[data-hazard="gas_leak"] { border-left-color: #a0ae78; }
+.twin-legend-symbol { width: 14px; font-size: 15px; font-weight: bold; line-height: 18px; text-align: center; flex-shrink: 0; }
+.twin-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 32px; background: radial-gradient(ellipse at center, var(--twin-raised), var(--twin-bg) 70%); }
+.twin-empty-icon { font-size: 76px; line-height: 1; margin: 24px; color: var(--twin-muted); }
+.twin-empty h1, .twin-empty h3 { font-size: 26px; font-weight: 500; }
+.twin-empty p { max-width: 400px; color: var(--twin-muted); font-size: 13px; line-height: 1.7; margin-top: 12px; }
+.twin-empty button { margin-top: 24px; background: var(--twin-raised); border: 1px solid var(--twin-blue); border-radius: 3px; padding: 10px 20px; color: var(--twin-ink); font-size: 13px; }
+.twin-modal { backdrop-filter: blur(5px); padding: 16px; }
+@media (max-width: 1400px) { .twin-controls .twin-eyebrow { display: none; } .twin-viewbar { padding: 7px 10px; } }
+@media (max-width: 767px) { .twin-inspector { width: 180px; right: 8px; bottom: 34px; } .twin-map-caption { display: none; } .twin-levels { top: 12px; left: 8px; } .twin-scene-footer { font-size: 9px; padding: 7px; } }
+
+.twin-scene { min-width: 0; }

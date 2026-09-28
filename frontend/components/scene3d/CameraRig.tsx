@@ -1,126 +1,97 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
-import type { AgentSnapshot, MineNode } from "@/lib/types";
-import { backendToThreePosition, lerpPosition } from "./geometry";
+import type { AgentSnapshot, MineNode, MineViewMode } from "@/lib/types";
+import { backendToThreePosition } from "./geometry";
 
 interface CameraRigProps {
   nodes: MineNode[];
   agents: Record<string, AgentSnapshot>;
   followedAgentId: string | null;
   panMode: boolean;
+  view: MineViewMode;
+  fitRequest: number;
+  focusNodes: MineNode[];
+  onCancelFollow: () => void;
 }
 
-export function CameraRig({ nodes, agents, followedAgentId, panMode }: CameraRigProps) {
+export function CameraRig({ nodes, agents, followedAgentId, panMode, view, fitRequest, focusNodes, onCancelFollow }: CameraRigProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
-  const { camera } = useThree();
-  const nodePositions = useRef(new Map<string, [number, number, number]>());
-  const lastLayoutSignature = useRef("");
+  const { camera, size } = useThree();
+  const positions = useMemo(() => new Map(nodes.map(n => [n.node_id, backendToThreePosition(n.position)])), [nodes]);
+  const scratch = useMemo(() => ({ target: new THREE.Vector3(), to: new THREE.Vector3(), delta: new THREE.Vector3() }), []);
+  const focusSignature = focusNodes.map(n => `${n.node_id}:${n.position.join(",")}`).join("|");
+  const focusRef = useRef(focusNodes);
+  focusRef.current = focusNodes;
 
   useEffect(() => {
     const controls = controlsRef.current;
-    if (!controls) return;
-
-    controls.listenToKeyEvents(document.body);
-    controls.enablePan = true;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.screenSpacePanning = true;
-    controls.zoomSpeed = 1.2;
-    controls.rotateSpeed = 1;
-    controls.target.set(0, 0, 0);
-
-    return () => controls.stopListenToKeyEvents();
-  }, []);
+    if (!controls || !focusRef.current.length) return;
+    const bounds = new THREE.Box3();
+    focusRef.current.forEach(n => bounds.expandByPoint(new THREE.Vector3(...backendToThreePosition(n.position))));
+    bounds.expandByScalar(0.7);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const vertical = THREE.MathUtils.degToRad((camera as THREE.PerspectiveCamera).fov / 2);
+    const horizontal = Math.atan(Math.tan(vertical) * size.width / Math.max(1, size.height));
+    const direction = view === "top" ? new THREE.Vector3(0, 1, 0.001)
+      : view === "lateral" ? new THREE.Vector3(0, 0.12, 1) : new THREE.Vector3(1, 0.72, 1);
+    direction.normalize();
+    const right = new THREE.Vector3(0, 1, 0).cross(direction).normalize();
+    const up = direction.clone().cross(right).normalize();
+    // Fit projected real points, instead of a bounding sphere that wastes screen space.
+    const offset = new THREE.Vector3();
+    let distance = view === "incidents" ? 4.5 : 3;
+    for (const node of focusRef.current) {
+      offset.set(...backendToThreePosition(node.position)).sub(center);
+      distance = Math.max(distance, offset.dot(direction) + Math.max(
+        (Math.abs(offset.dot(right)) + 0.7) / (Math.tan(horizontal) * 0.78),
+        (Math.abs(offset.dot(up)) + 0.7) / (Math.tan(vertical) * 0.8)
+      ));
+    }
+    controls.target.copy(center);
+    camera.position.copy(center).addScaledVector(direction.normalize(), distance);
+    controls.maxDistance = Math.max(220, distance * 3);
+    camera.far = Math.max(1000, distance * 5);
+    camera.updateProjectionMatrix();
+    controls.update();
+  }, [camera, view, fitRequest, focusSignature, size.width, size.height]);
 
   useEffect(() => {
-    const map = new Map<string, [number, number, number]>();
-    for (const node of nodes) {
-      map.set(node.node_id, backendToThreePosition(node.position));
-    }
-    nodePositions.current = map;
-
-    const layoutSignature = nodes
-      .map((node) => `${node.node_id}:${node.position.join(",")}`)
-      .join("|");
-    if (!nodes.length || layoutSignature === lastLayoutSignature.current) return;
-    lastLayoutSignature.current = layoutSignature;
-
-    const bounds = new THREE.Box3();
-    for (const position of map.values()) {
-      bounds.expandByPoint(new THREE.Vector3(...position));
-    }
-    const center = bounds.getCenter(new THREE.Vector3());
-    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
-    const fov = THREE.MathUtils.degToRad(
-      (camera as THREE.PerspectiveCamera).fov ?? 45
-    );
-    const distance = Math.max(18, (sphere.radius / Math.sin(fov / 2)) * 1.4);
-    const direction = new THREE.Vector3(1, 0.8, 1).normalize();
-
-    controlsRef.current?.target.copy(center);
-    camera.position.copy(center).addScaledVector(direction, distance);
-    controlsRef.current?.update();
-  }, [camera, nodes]);
-
-  useFrame(() => {
-    if (!followedAgentId) return;
+    if (!followedAgentId || !controlsRef.current) return;
     const agent = agents[followedAgentId];
-    if (!agent) return;
+    const from = agent && positions.get(agent.node_id);
+    const to = agent && positions.get(agent.next_node_id);
+    if (!from) return;
+    scratch.target.set(...from);
+    if (to) scratch.target.lerp(scratch.to.set(...to), agent.progress);
+    controlsRef.current.target.copy(scratch.target);
+    camera.position.copy(scratch.target).add(scratch.delta.set(2.2, 1.8, 2.2));
+    controlsRef.current.update();
+    // Reposition only when following changes, not at every snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followedAgentId]);
 
-    const from = nodePositions.current.get(agent.node_id);
-    const to = nodePositions.current.get(agent.next_node_id) ?? from;
+  useFrame((_, delta) => {
+    const controls = controlsRef.current;
+    const agent = followedAgentId ? agents[followedAgentId] : null;
+    if (!controls || !agent || agent.status === "evacuated") return;
+    const from = positions.get(agent.node_id), to = positions.get(agent.next_node_id) ?? from;
     if (!from || !to) return;
-
-    const targetPos = lerpPosition(from, to, agent.progress);
-    const target = new THREE.Vector3(...targetPos);
-
-    if (controlsRef.current) {
-      controlsRef.current.target.lerp(target, 0.08);
-      controlsRef.current.update();
-    }
-    const desiredCameraPos = target
-      .clone()
-      .add(new THREE.Vector3(2.5, 2.2, 2.5));
-    camera.position.lerp(desiredCameraPos, 0.04);
+    scratch.target.set(...from).lerp(scratch.to.set(...to), agent.progress);
+    scratch.delta.copy(scratch.target).sub(controls.target).multiplyScalar(1 - Math.exp(-6 * delta));
+    controls.target.add(scratch.delta);
+    camera.position.add(scratch.delta);
+    controls.update();
   });
 
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      makeDefault
-      enableDamping
-      dampingFactor={0.08}
-      minDistance={4}
-      maxDistance={220}
-      minPolarAngle={0.15}
-      maxPolarAngle={Math.PI / 2 - 0.1}
-      enablePan={true}
-      panSpeed={2.8}
-      keyPanSpeed={7}
-      mouseButtons={
-        panMode
-          ? {
-              LEFT: THREE.MOUSE.PAN,
-              MIDDLE: THREE.MOUSE.DOLLY,
-              RIGHT: THREE.MOUSE.ROTATE,
-            }
-          : {
-              LEFT: THREE.MOUSE.ROTATE,
-              MIDDLE: THREE.MOUSE.DOLLY,
-              RIGHT: THREE.MOUSE.PAN,
-            }
-      }
-      rotateSpeed={1}
-      zoomSpeed={1.2}
-      minAzimuthAngle={-Infinity}
-      maxAzimuthAngle={Infinity}
-      screenSpacePanning={true}
-      zoomToCursor
-    />
-  );
+  return <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08}
+    minDistance={0.65} maxDistance={220} minPolarAngle={0.001} maxPolarAngle={Math.PI * 0.88}
+    enablePan panSpeed={1} rotateSpeed={0.7} zoomSpeed={0.9} screenSpacePanning zoomToCursor
+    onStart={() => { if (followedAgentId) onCancelFollow(); }}
+    mouseButtons={panMode ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+      : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }} />;
 }
