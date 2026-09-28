@@ -36,8 +36,15 @@ def stratified_group_kfold_splits(
     aparece simultáneamente en train y test de un mismo fold).
     """
     settings = get_settings()
-    n_splits = n_splits or settings.CV_N_FOLDS
+    # Only use settings default if n_splits is explicitly None, not if it's 0
+    if n_splits is None:
+        n_splits = settings.CV_N_FOLDS
     random_seed = random_seed if random_seed is not None else settings.RANDOM_SEED
+
+    # Limit n_splits to number of unique subjects
+    n_unique_subjects = len(set(subject_ids))
+    if n_splits > n_unique_subjects:
+        n_splits = n_unique_subjects
 
     label_to_int = {name: i for i, name in enumerate(sorted(set(labels)))}
     y_int = np.array([label_to_int[label] for label in labels])

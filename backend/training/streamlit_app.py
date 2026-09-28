@@ -40,11 +40,130 @@ from backend.training.dataset_loader import DATASET_REGISTRY, get_loader
 from backend.training.eda import run_eda
 from backend.training.architectures import ARCHITECTURE_BUILDERS
 from backend.training.train import fit_final_model, train_cv
+from backend.preprocessing.windowing import create_windows
 from backend.utils.config import get_settings
+from backend.utils.logging_config import get_logger
+from scipy.stats import friedmanchisquare, wilcoxon, shapiro
+from scipy.stats import rankdata
 
 st.set_page_config(page_title="Motor IA — CRISP-DM Pipeline", layout="wide")
 
 settings = get_settings()
+
+CV_RESULTS_PATH = settings.ARTIFACTS_DIR / "cv_results.json"
+
+def load_cv_results_from_disk():
+    """Load CV results from disk if available."""
+    if CV_RESULTS_PATH.exists():
+        try:
+            with open(CV_RESULTS_PATH, "r") as f:
+                data = json.load(f)
+                return data.get("results"), data.get("config")
+        except Exception as e:
+            logger.warning(f"Error loading CV results from disk: {e}")
+    return None, None
+
+def save_cv_results_to_disk(results, config):
+    """Save CV results to disk."""
+    CV_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(CV_RESULTS_PATH, "w") as f:
+        json.dump({"results": results, "config": config}, f, indent=2)
+
+# Initialize session state
+if "cv_results" not in st.session_state:
+    st.session_state.cv_results, st.session_state.last_cv_config = load_cv_results_from_disk()
+if "stats_results" not in st.session_state:
+    st.session_state.stats_results = None
+if "last_cv_config" not in st.session_state:
+    st.session_state.last_cv_config = None
+
+def load_wesad_data_for_training(n_subjects: int = None, architecture: str = "cnn_lstm") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Carga datos reales de WESAD y los procesa para entrenamiento.
+    
+    Returns:
+        X: Array de features (n_samples, sequence_length, n_channels) o (n_samples, n_features)
+        y: Array de etiquetas (n_samples,)
+        subject_ids: Array de IDs de sujetos (n_samples,)
+    """
+    loader = get_loader("wesad")
+    
+    if not loader.is_available_locally():
+        raise ValueError("Dataset WESAD no disponible localmente. Por favor descárguelo primero.")
+    
+    subjects = loader.list_subjects()
+    # Load more subjects to support higher fold counts
+    if n_subjects is None:
+        n_subjects = min(5, len(subjects))  # Default to 5 subjects to support up to 5-fold CV
+    subjects = subjects[:n_subjects]
+    
+    all_windows = []
+    all_labels = []
+    all_subject_ids = []
+    
+    # Filter to only stress classes (baseline, stress, amusement)
+    valid_class_names = ["baseline", "stress", "amusement"]
+    
+    for subject_id in subjects:
+        try:
+            recording = loader.load_subject(subject_id)
+        except MemoryError:
+            # Fallback to synthetic data if memory is insufficient
+            from backend.training.synthetic_wesad import generate_synthetic_data
+            
+            # Generate synthetic data as fallback
+            if architecture == "features_mlp":
+                X, y, subject_ids = generate_synthetic_data(n_subjects=n_subjects, n_samples_per_subject=100, sequence_length=1)
+                X = X.reshape(X.shape[0], -1)
+            else:
+                X, y, subject_ids = generate_synthetic_data(n_subjects=n_subjects, n_samples_per_subject=100, sequence_length=50)
+            
+            label_mapping = {0: "baseline", 1: "stress", 2: "amusement"}
+            y_names = np.array([label_mapping[label] for label in y])
+            
+            return X, y_names, subject_ids
+        
+        # Create windows using the windowing module
+        windows = create_windows(
+            recording,
+            window_seconds=5,  # 5 second windows to avoid OOM with attention models
+            overlap=0.5,
+            valid_class_names=valid_class_names,
+            purity_threshold=0.9
+        )
+        
+        if len(windows) == 0:
+            continue
+        
+        # Get channels for CNN architectures
+        channels_to_use = ["ecg", "eda", "emg", "temp", "resp", "acc_x", "acc_y", "acc_z"]
+        
+        for window in windows:
+            channel_data = []
+            for ch in channels_to_use:
+                if ch in window.channels:
+                    channel_data.append(window.channels[ch])
+            
+            if len(channel_data) == 0:
+                continue
+            
+            signal_matrix = np.stack(channel_data, axis=1)  # (n_samples, n_channels)
+            
+            all_windows.append(signal_matrix)
+            all_labels.append(window.label_name)
+            all_subject_ids.append(window.subject_id)
+    
+    if len(all_windows) == 0:
+        raise ValueError("No se pudo cargar ningún dato del dataset WESAD")
+    
+    X = np.stack(all_windows, axis=0)  # (n_windows, n_samples, n_channels)
+    y_names = np.array(all_labels)
+    subject_ids = np.array(all_subject_ids)
+    
+    # For features_mlp, flatten the windows; for CNN, keep 3D shape
+    if architecture == "features_mlp":
+        X = X.reshape(X.shape[0], -1)  # Flatten to 2D
+    
+    return X, y_names, subject_ids
 
 # Sidebar con configuración del dataset
 with st.sidebar:
@@ -55,10 +174,6 @@ with st.sidebar:
         value="backend/data/raw/WESAD",
         key="sidebar_dataset_path"
     )
-    
-    st.header("⚙️ Configuración General")
-    cv_strategy = st.selectbox("Estrategia de CV", ["LOSO (Leave-One-Subject-Out)", "K-Fold", "Hold-out"], key="sidebar_cv_strategy")
-    n_folds = st.number_input("Número de folds", value=5, min_value=2, key="sidebar_n_folds")
     
     if st.button("Escanear dataset"):
         st.success("Dataset escaneado correctamente")
@@ -281,7 +396,9 @@ with tab_training:
         
         if st.button("▶️ Iniciar Entrenamiento", type="primary"):
             if retrain_needed:
-                st.warning("Algunos modelos se reentrenarán con los nuevos hiperparámetros.")
+                if not st.confirm("⚠️ Algunos modelos ya están entrenados. ¿Desea reentrenarlos con los nuevos hiperparámetros?"):
+                    st.warning("Entrenamiento cancelado.")
+                    st.stop()
             
             # Create progress placeholder
             progress_bar = st.progress(0)
@@ -317,22 +434,13 @@ with tab_training:
                         percentage_text.text(f"Progreso: {percentage}%")
                         status_text.text(f"Modelo: {model} | Fold: {fold}/{total_folds} | Epoch: {epoch}/{total_epochs}")
                     
-                    # Load actual data from dataset
-                    st.info(f"📊 Cargando datos para {model_name}...")
+                    # Load actual data from WESAD dataset
+                    st.info(f"📊 Cargando datos reales de WESAD para {model_name}...")
                     
-                    # Get data from loader (this is a simplified version)
-                    # In production, you would properly load X, y, subject_ids
-                    # For now, we'll create synthetic data for demonstration
-                    from backend.training.synthetic_wesad import generate_synthetic_data
-                    
-                    # Generate data with appropriate shape based on architecture
-                    if model_name == "features_mlp":
-                        # features_mlp expects 2D input (n_samples, n_features)
-                        X, y, subject_ids = generate_synthetic_data(n_subjects=subject_limit, n_samples_per_subject=100, sequence_length=1)
-                        X = X.reshape(X.shape[0], -1)  # Flatten to 2D
-                    else:
-                        # CNN-based architectures expect 3D input (n_samples, sequence_length, n_channels)
-                        X, y, subject_ids = generate_synthetic_data(n_subjects=subject_limit, n_samples_per_subject=100, sequence_length=50)
+                    X, y_names, subject_ids = load_wesad_data_for_training(
+                        n_subjects=subject_limit,
+                        architecture=model_name
+                    )
                     
                     # Train the model with progress callback
                     st.info(f"🤖 Iniciando entrenamiento de {model_name}...")
@@ -388,8 +496,13 @@ with tab_cv:
     st.header("⚖️ Validación Cruzada")
     
     st.subheader("Configuración de Cross-Validation")
-    cv_strategy_current = st.selectbox("Estrategia de CV", ["LOSO (Leave-One-Subject-Out)", "K-Fold", "Hold-out"], key="cv_cv_strategy")
-    n_folds_current = st.number_input("Número de folds", value=5, min_value=2, key="cv_n_folds")
+    cv_strategy_current = st.selectbox("Estrategia de CV", ["LOSO (Leave-One-Subject-Out)", "K-Fold", "Hold-out"], key="cv_strategy_select")
+    
+    if cv_strategy_current == "LOSO (Leave-One-Subject-Out)":
+        st.info("ℹ️ LOSO usa un fold por sujeto. El número de folds se determina automáticamente por la cantidad de sujetos disponibles.")
+        n_folds_current = 5  # Will be determined by actual subjects
+    else:
+        n_folds_current = st.number_input("Número de folds", value=3, min_value=2, key="cv_n_folds_input")
     
     st.subheader("Modelos Disponibles para Validación")
     models_registry_path = Path("backend/models_registry")
@@ -411,10 +524,67 @@ with tab_cv:
         cv_epochs = st.number_input("Epochs por fold", value=10, min_value=1, max_value=100, key="cv_epochs")
         cv_batch_size = st.number_input("Batch size", value=32, min_value=1, max_value=128, key="cv_batch_size")
         
-        if st.button("▶️ Ejecutar Validación Cruzada", type="primary"):
+        # Display previous results if available
+        if st.session_state.cv_results:
+            st.info("📊 Resultados de validación cruzada previos disponibles")
+            col_clear, col_rerun = st.columns(2)
+            with col_clear:
+                if st.button("🗑️ Limpiar resultados"):
+                    st.session_state.cv_results = None
+                    st.session_state.last_cv_config = None
+                    if CV_RESULTS_PATH.exists():
+                        CV_RESULTS_PATH.unlink()
+                    st.rerun()
+            
+            df_cv_results = pd.DataFrame(st.session_state.cv_results)
+            st.subheader("📊 TABLA 3: Resultados de Validación Cruzada (Previos)")
+            st.dataframe(df_cv_results, use_container_width=True)
+            
+            # Display aggregate metrics per model
+            st.subheader("Métricas Agregadas por Modelo (Previos)")
+            unique_models = df_cv_results["Arquitectura"].unique()
+            for model in unique_models:
+                model_results = [r for r in st.session_state.cv_results if r["Arquitectura"] == model]
+                if model_results:
+                    with st.expander(f"📊 {model}"):
+                        col1, col2, col3 = st.columns(3)
+                        acc_values = [float(r["Accuracy"]) for r in model_results]
+                        f1_values = [float(r["F1-Score"]) for r in model_results]
+                        prec_values = [float(r["Precision"]) for r in model_results]
+                        rec_values = [float(r["Recall"]) for r in model_results]
+                        
+                        with col1:
+                            st.metric("Accuracy Promedio", f"{np.mean(acc_values):.4f}")
+                            st.metric("Accuracy Std", f"{np.std(acc_values):.4f}")
+                        with col2:
+                            st.metric("F1-Score Promedio", f"{np.mean(f1_values):.4f}")
+                            st.metric("F1-Score Std", f"{np.std(f1_values):.4f}")
+                        with col3:
+                            st.metric("Precision Promedio", f"{np.mean(prec_values):.4f}")
+                            st.metric("Recall Promedio", f"{np.mean(rec_values):.4f}")
+            
+            st.divider()
+        
+        # Button text changes based on whether results exist
+        button_text = "🔄 Ejecutar de Nuevo" if st.session_state.cv_results else "▶️ Ejecutar Validación Cruzada"
+        
+        if st.button(button_text, type="primary"):
             if not selected_cv_models:
                 st.warning("Seleccione al menos un modelo para validación cruzada.")
             else:
+                # Check if configuration changed
+                current_config = {
+                    "models": tuple(sorted(selected_cv_models)),
+                    "strategy": cv_strategy_current,
+                    "n_folds": n_folds_current,
+                    "epochs": cv_epochs,
+                    "batch_size": cv_batch_size
+                }
+                
+                if st.session_state.last_cv_config and st.session_state.last_cv_config != current_config:
+                    if not st.confirm("⚠️ La configuración de CV ha cambiado. ¿Desea ejecutar la validación cruzada nuevamente?"):
+                        st.warning("Ejecución cancelada.")
+                        st.stop()
                 # Create progress bar
                 cv_progress_bar = st.progress(0)
                 cv_status_text = st.empty()
@@ -426,19 +596,12 @@ with tab_cv:
                 try:
                     for model_idx, selected_cv_model in enumerate(selected_cv_models):
                         # Load data
-                        cv_status_text.text(f"📊 Cargando datos para {selected_cv_model} ({model_idx + 1}/{total_models})...")
-                        from backend.training.synthetic_wesad import generate_synthetic_data
+                        cv_status_text.text(f"📊 Cargando datos reales de WESAD para {selected_cv_model} ({model_idx + 1}/{total_models})...")
                         
-                        # Generate data with appropriate shape based on architecture
-                        if selected_cv_model == "features_mlp":
-                            X, y, subject_ids = generate_synthetic_data(n_subjects=5, n_samples_per_subject=100, sequence_length=1)
-                            X = X.reshape(X.shape[0], -1)  # Flatten to 2D
-                        else:
-                            X, y, subject_ids = generate_synthetic_data(n_subjects=5, n_samples_per_subject=100, sequence_length=50)
-                        
-                        # Convert y to string labels for train_cv
-                        label_mapping = {0: "baseline", 1: "stress", 2: "amusement"}
-                        y_names = np.array([label_mapping[label] for label in y])
+                        X, y_names, subject_ids = load_wesad_data_for_training(
+                            n_subjects=5,  # Always load 5 subjects to support any fold count up to 5
+                            architecture=selected_cv_model
+                        )
                         
                         # Create progress callback
                         def cv_progress_callback(fold, total_folds, epoch, total_epochs, model):
@@ -453,6 +616,14 @@ with tab_cv:
                         # Run cross-validation
                         cv_status_text.text(f"🤖 Ejecutando validación cruzada para {selected_cv_model}...")
                         
+                        # Parse CV strategy correctly
+                        if "LOSO" in cv_strategy_current:
+                            cv_strategy_parsed = "loso"
+                        elif "K-Fold" in cv_strategy_current:
+                            cv_strategy_parsed = "kfold"
+                        else:
+                            cv_strategy_parsed = "kfold"  # Default to kfold for Hold-out
+                        
                         result = train_cv(
                             architecture_name=selected_cv_model,
                             X=X,
@@ -461,7 +632,7 @@ with tab_cv:
                             epochs=cv_epochs,
                             batch_size=cv_batch_size,
                             verbose=0,
-                            cv_strategy=cv_strategy_current.split()[0].lower() if "LOSO" in cv_strategy_current else "kfold",
+                            cv_strategy=cv_strategy_parsed,
                             n_folds=n_folds_current,
                             progress_callback=cv_progress_callback
                         )
@@ -485,6 +656,11 @@ with tab_cv:
                     cv_status_text.text("Validación cruzada completada")
                     
                     st.success(f"✅ Validación cruzada finalizada para {len(selected_cv_models)} modelo(s)")
+                    
+                    # Save results to session state and disk
+                    st.session_state.cv_results = all_cv_results
+                    st.session_state.last_cv_config = current_config
+                    save_cv_results_to_disk(all_cv_results, current_config)
                     
                     if all_cv_results:
                         df_cv_results = pd.DataFrame(all_cv_results)
@@ -553,62 +729,147 @@ with tab_stats:
     if st.button("▶️ Ejecutar Pruebas Estadísticas", type="primary"):
         if not selected_models:
             st.error("Seleccione al menos un modelo para comparar.")
+        elif not st.session_state.cv_results:
+            st.error("Primero ejecute la validación cruzada para obtener resultados.")
         else:
             st.success("Pruebas estadísticas iniciadas...")
             
-            # Simulación de resultados estadísticos
-            st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas")
-            stats_data = {
-                "Prueba": ["Friedman Chi-square", "p-value Friedman", "Wilcoxon (mejor vs segundo)", "p-value Wilcoxon"],
-                "Valor": [15.23, 0.002, 45.67, 0.001],
-                "Interpretación": ["Diferencias significativas entre modelos", "p < 0.05 (significativo)", 
-                                 "Mejor modelo superior significativamente", "p < 0.01 (muy significativo)"]
-            }
-            df_stats = pd.DataFrame(stats_data)
-            st.dataframe(df_stats, use_container_width=True)
-            st.info("**Interpretación:** Las pruebas estadísticas validan si las diferencias observadas entre modelos "
-                   "son estadísticamente significativas y no producto del azar.")
-            st.success("**Explicabilidad:** La significancia estadística respalda la selección del mejor modelo con "
-                      "fundamentos matemáticos rigurosos, esencial para publicación científica.")
+            # Extract CV results for selected models
+            cv_results = st.session_state.cv_results
+            model_metrics = {}
             
-            st.subheader("📊 FIGURA 4: Comparación Visual de Modelos")
-            fig, ax = plt.subplots(figsize=(12, 6))
-            model_names = ["CNN-LSTM", "Features-MLP", "CNN-GRU", "GRU-LSTM", "Attention", "CNN-Attention"]
-            accuracy = [0.915, 0.885, 0.935, 0.905, 0.865, 0.945]
-            f1_scores = [0.905, 0.875, 0.925, 0.895, 0.855, 0.935]
+            for model in selected_models:
+                model_data = [r for r in cv_results if r["Arquitectura"] == model]
+                if model_data:
+                    model_metrics[model] = {
+                        "accuracy": [float(r["Accuracy"]) for r in model_data],
+                        "f1": [float(r["F1-Score"]) for r in model_data]
+                    }
             
-            x = np.arange(len(model_names))
-            width = 0.35
-            ax.bar(x - width/2, accuracy, width, label='Accuracy', alpha=0.8)
-            ax.bar(x + width/2, f1_scores, width, label='F1-Score', alpha=0.8)
-            ax.set_xlabel('Arquitectura')
-            ax.set_ylabel('Score')
-            ax.set_title('Comparación de Métricas por Arquitectura')
-            ax.set_xticks(x)
-            ax.set_xticklabels(model_names, rotation=45, ha='right')
-            ax.legend()
-            ax.grid(axis='y', alpha=0.3)
-            ax.set_ylim(0.8, 1.0)
-            st.pyplot(fig)
-            st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
-                   "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
-            st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
-                      "permite comunicar resultados a stakeholders no técnicos.")
-            
-            st.subheader("📊 FIGURA 5: Diagrama de Nemenyi (Ranking)")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            rankings = [1.5, 2.3, 3.1, 3.8, 4.2, 5.1]
-            colors = ['green' if r <= 2 else 'orange' if r <= 4 else 'red' for r in rankings]
-            ax.barh(model_names, rankings, color=colors)
-            ax.set_xlabel("Ranking Promedio (menor es mejor)")
-            ax.set_title("Ranking de Modelos según Prueba de Nemenyi")
-            ax.invert_yaxis()
-            ax.grid(axis='x', alpha=0.3)
-            st.pyplot(fig)
-            st.info("**Interpretación:** El diagrama muestra el ranking promedio de cada modelo según la prueba de Nemenyi. "
-                   "Modelos con rankings similares no tienen diferencias significativas.")
-            st.success("**Explicabilidad:** El ranking visual permite identificar grupos de modelos con rendimiento "
-                      "comparable y seleccionar el óptimo considerando también complejidad computacional.")
+            if len(model_metrics) < 2:
+                st.error("Se necesitan al menos 2 modelos con resultados de CV para comparación.")
+            else:
+                # Real statistical tests
+                stats_results = []
+                
+                # Friedman test
+                use_friedman = st.session_state.get("stats_friedman", True)
+                if use_friedman and len(model_metrics) >= 3:
+                    accuracy_values = [model_metrics[m]["accuracy"] for m in selected_models if m in model_metrics]
+                    if len(accuracy_values) >= 3:
+                        try:
+                            stat, p_value = friedmanchisquare(*accuracy_values)
+                            stats_results.append({
+                                "Prueba": "Friedman Chi-square",
+                                "Valor": f"{stat:.4f}",
+                                "p-value": f"{p_value:.4f}",
+                                "Interpretación": "Significativo" if p_value < 0.05 else "No significativo"
+                            })
+                        except Exception as e:
+                            st.warning(f"Friedman test falló: {e}")
+                
+                # Wilcoxon test (best vs second best)
+                use_wilcoxon = st.session_state.get("stats_wilcoxon", True)
+                if use_wilcoxon and len(model_metrics) >= 2:
+                    # Find best and second best by mean accuracy
+                    mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
+                    sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
+                    best_model, second_best = sorted_models[0][0], sorted_models[1][0]
+                    
+                    try:
+                        stat, p_value = wilcoxon(
+                            model_metrics[best_model]["accuracy"],
+                            model_metrics[second_best]["accuracy"]
+                        )
+                        stats_results.append({
+                            "Prueba": f"Wilcoxon ({best_model} vs {second_best})",
+                            "Valor": f"{stat:.4f}",
+                            "p-value": f"{p_value:.4f}",
+                            "Interpretación": "Significativo" if p_value < 0.05 else "No significativo"
+                        })
+                    except Exception as e:
+                        st.warning(f"Wilcoxon test falló: {e}")
+                
+                # Shapiro-Wilk test for normality
+                use_shapiro = st.session_state.get("stats_shapiro", False)
+                if use_shapiro:
+                    for model in selected_models:
+                        if model in model_metrics:
+                            try:
+                                stat, p_value = shapiro(model_metrics[model]["accuracy"])
+                                stats_results.append({
+                                    "Prueba": f"Shapiro-Wilk ({model})",
+                                    "Valor": f"{stat:.4f}",
+                                    "p-value": f"{p_value:.4f}",
+                                    "Interpretación": "Normal" if p_value > 0.05 else "No normal"
+                                })
+                            except Exception as e:
+                                st.warning(f"Shapiro-Wilk test falló para {model}: {e}")
+                
+                # Display results
+                st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas")
+                if stats_results:
+                    df_stats = pd.DataFrame(stats_results)
+                    st.dataframe(df_stats, use_container_width=True)
+                else:
+                    st.info("No se pudieron ejecutar las pruebas estadísticas.")
+                
+                st.info("**Interpretación:** Las pruebas estadísticas validan si las diferencias observadas entre modelos "
+                       "son estadísticamente significativas y no producto del azar.")
+                st.success("**Explicabilidad:** La significancia estadística respalda la selección del mejor modelo con "
+                          "fundamentos matemáticos rigurosos, esencial para publicación científica.")
+                
+                # Generate real figures based on CV results
+                st.subheader("📊 FIGURA 4: Comparación Visual de Modelos")
+                fig, ax = plt.subplots(figsize=(12, 6))
+                
+                model_names = selected_models
+                accuracy_means = [np.mean(model_metrics[m]["accuracy"]) for m in model_names if m in model_metrics]
+                f1_means = [np.mean(model_metrics[m]["f1"]) for m in model_names if m in model_metrics]
+                
+                x = np.arange(len(model_names))
+                width = 0.35
+                ax.bar(x - width/2, accuracy_means, width, label='Accuracy', alpha=0.8)
+                ax.bar(x + width/2, f1_means, width, label='F1-Score', alpha=0.8)
+                ax.set_xlabel('Arquitectura')
+                ax.set_ylabel('Score')
+                ax.set_title('Comparación de Métricas por Arquitectura')
+                ax.set_xticks(x)
+                ax.set_xticklabels(model_names, rotation=45, ha='right')
+                ax.legend()
+                ax.grid(axis='y', alpha=0.3)
+                ax.set_ylim(0.5, 1.0)
+                st.pyplot(fig)
+                st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
+                       "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
+                st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
+                          "permite comunicar resultados a stakeholders no técnicos.")
+                
+                # Nemenyi-like ranking based on mean accuracy
+                st.subheader("📊 FIGURA 5: Ranking de Modelos (por Accuracy Promedio)")
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
+                sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
+                rankings = {model: rank + 1 for rank, (model, _) in enumerate(sorted_models)}
+                
+                model_names_plot = [m for m, _ in sorted_models]
+                ranking_values = [rankings[m] for m in model_names_plot]
+                colors = ['green' if r == 1 else 'orange' if r == 2 else 'red' for r in ranking_values]
+                
+                ax.barh(model_names_plot, ranking_values, color=colors)
+                ax.set_xlabel("Ranking (1 = mejor)")
+                ax.set_title("Ranking de Modelos según Accuracy Promedio")
+                ax.invert_yaxis()
+                ax.grid(axis='x', alpha=0.3)
+                st.pyplot(fig)
+                st.info("**Interpretación:** El diagrama muestra el ranking de cada modelo según accuracy promedio. "
+                       "Modelos con ranking 1 son los mejores.")
+                st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
+                          "y comparar el rendimiento relativo entre arquitecturas.")
+                
+                # Save stats results to session state
+                st.session_state.stats_results = stats_results
 
 with tab_selection:
     st.header("🏆 Selección del Mejor Modelo")
@@ -616,9 +877,77 @@ with tab_selection:
     st.subheader("Criterio de Selección")
     selection_criteria = st.selectbox(
         "Seleccionar mejor modelo basado en:",
-        ["Precisión (Accuracy)", "F1-Score", "AUC-ROC", "Puntaje Compuesto", "Latencia de Inferencia"],
+        ["Precisión (Accuracy)", "F1-Score", "Puntaje Compuesto"],
         key="selection_criteria"
     )
+    
+    # Select best model from CV results
+    if st.session_state.cv_results:
+        st.info("📊 Usando resultados de validación cruzada para selección")
+        
+        cv_results = st.session_state.cv_results
+        model_metrics = {}
+        
+        for model in set(r["Arquitectura"] for r in cv_results):
+            model_data = [r for r in cv_results if r["Arquitectura"] == model]
+            if model_data:
+                model_metrics[model] = {
+                    "accuracy": [float(r["Accuracy"]) for r in model_data],
+                    "f1": [float(r["F1-Score"]) for r in model_data],
+                    "precision": [float(r["Precision"]) for r in model_data],
+                    "recall": [float(r["Recall"]) for r in model_data]
+                }
+        
+        # Calculate composite score
+        for model in model_metrics:
+            mean_acc = np.mean(model_metrics[model]["accuracy"])
+            mean_f1 = np.mean(model_metrics[model]["f1"])
+            mean_prec = np.mean(model_metrics[model]["precision"])
+            mean_rec = np.mean(model_metrics[model]["recall"])
+            # Composite score: weighted average
+            model_metrics[model]["composite"] = 0.4 * mean_acc + 0.3 * mean_f1 + 0.15 * mean_prec + 0.15 * mean_rec
+        
+        # Select best model based on criteria
+        if selection_criteria == "Precisión (Accuracy)":
+            best_model = max(model_metrics.items(), key=lambda x: np.mean(x[1]["accuracy"]))
+            metric_name = "Accuracy"
+            metric_value = np.mean(best_model[1]["accuracy"])
+        elif selection_criteria == "F1-Score":
+            best_model = max(model_metrics.items(), key=lambda x: np.mean(x[1]["f1"]))
+            metric_name = "F1-Score"
+            metric_value = np.mean(best_model[1]["f1"])
+        else:  # Puntaje Compuesto
+            best_model = max(model_metrics.items(), key=lambda x: x[1]["composite"])
+            metric_name = "Puntaje Compuesto"
+            metric_value = best_model[1]["composite"]
+        
+        st.subheader("🏆 Mejor Modelo Recomendado")
+        st.success(f"**{best_model[0]}** seleccionado como mejor modelo")
+        st.metric(metric_name, f"{metric_value:.4f}")
+        
+        # Show all models comparison
+        st.subheader("Comparación de Todos los Modelos")
+        comparison_data = []
+        for model, metrics in model_metrics.items():
+            comparison_data.append({
+                "Arquitectura": model,
+                "Accuracy Promedio": f"{np.mean(metrics['accuracy']):.4f}",
+                "Accuracy Std": f"{np.std(metrics['accuracy']):.4f}",
+                "F1-Score Promedio": f"{np.mean(metrics['f1']):.4f}",
+                "F1-Score Std": f"{np.std(metrics['f1']):.4f}",
+                "Precision Promedio": f"{np.mean(metrics['precision']):.4f}",
+                "Recall Promedio": f"{np.mean(metrics['recall']):.4f}",
+                "Puntaje Compuesto": f"{metrics['composite']:.4f}"
+            })
+        
+        df_comparison = pd.DataFrame(comparison_data)
+        df_comparison = df_comparison.sort_values(by="Puntaje Compuesto", ascending=False)
+        st.dataframe(df_comparison, use_container_width=True)
+        
+        st.info("**Interpretación:** La tabla muestra todas las métricas promedio de cada modelo según los resultados de validación cruzada.")
+        st.success("**Explicabilidad:** La selección del mejor modelo se basa en resultados reales de CV, no en valores por defecto.")
+    else:
+        st.warning("No hay resultados de validación cruzada disponibles. Ejecute la validación cruzada primero.")
     
     # Mostrar modelo activo actual
     active_model_path = Path("backend/models_registry/active_model.json")

@@ -264,8 +264,11 @@ def build_attention_model(
 
     inputs = layers.Input(shape=input_shape, name="raw_signal_window")
     
+    # Reduce sequence length with pooling before attention to avoid OOM
+    x = layers.MaxPooling1D(pool_size=10, strides=10)(inputs)
+    
     # Proyección para attention
-    x = layers.Dense(hp.attention_units)(inputs)
+    x = layers.Dense(hp.attention_units)(x)
     x = layers.MultiHeadAttention(
         num_heads=hp.num_heads, key_dim=hp.attention_units // hp.num_heads
     )(x, x)
@@ -299,6 +302,9 @@ def build_cnn_attention_model(
         x = layers.BatchNormalization()(x)
         x = layers.MaxPooling1D(pool_size=2)(x)
         x = layers.Dropout(hp.dropout_rate)(x)
+    
+    # Additional pooling before attention to avoid OOM
+    x = layers.MaxPooling1D(pool_size=5, strides=5)(x)
     
     # Attention mechanism
     x = layers.Dense(hp.attention_units)(x)
