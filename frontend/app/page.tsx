@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const [tunnelOpacity, setTunnelOpacity] = useState(0.85);
   const [showLabels, setShowLabels] = useState(true);
   const [performanceMode, setPerformanceMode] = useState(false);
+  const [panMode, setPanMode] = useState(false);
 
   const { snapshot, connected } = useSimulationSocket(sessionId);
 
@@ -81,6 +82,8 @@ export default function DashboardPage() {
             onStep={handleStep}
             onNewScenario={() => setLauncherOpen(true)}
             disabled={!sessionId}
+            panMode={panMode}
+            onPanModeChange={setPanMode}
             tunnelOpacity={tunnelOpacity}
             onTunnelOpacityChange={setTunnelOpacity}
             showLabels={showLabels}
@@ -89,14 +92,15 @@ export default function DashboardPage() {
             onPerformanceModeChange={setPerformanceMode}
           />
 
-          <div className="relative flex flex-1 overflow-hidden">
-            <div className="relative flex-1">
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+            <div className="relative min-h-0 flex-1">
               {snapshot ? (
                 <MineGraphScene
                   nodes={snapshot.nodes}
                   edges={snapshot.edges}
                   agents={snapshot.agents}
                   tunnelOpacity={tunnelOpacity}
+                  panMode={panMode}
                   showLabels={showLabels}
                   performanceMode={performanceMode}
                   followedAgentId={followedAgentId}
@@ -116,7 +120,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            <aside className="panel-scroll w-96 shrink-0 overflow-y-auto border-l border-hairline bg-panel">
+            <aside className="panel-scroll h-52 w-full shrink-0 overflow-y-auto border-t border-hairline bg-panel md:h-auto md:w-96 md:border-l md:border-t-0">
               <StressPanel agents={snapshot?.agents ?? {}} step={snapshot?.step ?? 0} />
               <EventLogPanel hazards={snapshot?.active_hazards ?? []} />
               <LegendPanel />

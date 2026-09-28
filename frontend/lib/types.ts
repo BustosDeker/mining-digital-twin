@@ -12,6 +12,8 @@ export type NodeType =
 
 export type EdgeStatus = "clear" | "degraded" | "blocked";
 
+export type MineViewMode = "general" | "top" | "lateral" | "incidents" | "routes";
+
 export interface MineNode {
   node_id: string;
   node_type: NodeType;

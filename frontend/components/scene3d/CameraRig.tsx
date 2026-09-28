@@ -12,12 +12,30 @@ interface CameraRigProps {
   nodes: MineNode[];
   agents: Record<string, AgentSnapshot>;
   followedAgentId: string | null;
+  panMode: boolean;
 }
 
-export function CameraRig({ nodes, agents, followedAgentId }: CameraRigProps) {
+export function CameraRig({ nodes, agents, followedAgentId, panMode }: CameraRigProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const { camera } = useThree();
   const nodePositions = useRef(new Map<string, [number, number, number]>());
+  const lastLayoutSignature = useRef("");
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    controls.listenToKeyEvents(document.body);
+    controls.enablePan = true;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.screenSpacePanning = true;
+    controls.zoomSpeed = 1.2;
+    controls.rotateSpeed = 1;
+    controls.target.set(0, 0, 0);
+
+    return () => controls.stopListenToKeyEvents();
+  }, []);
 
   useEffect(() => {
     const map = new Map<string, [number, number, number]>();
@@ -25,7 +43,29 @@ export function CameraRig({ nodes, agents, followedAgentId }: CameraRigProps) {
       map.set(node.node_id, backendToThreePosition(node.position));
     }
     nodePositions.current = map;
-  }, [nodes]);
+
+    const layoutSignature = nodes
+      .map((node) => `${node.node_id}:${node.position.join(",")}`)
+      .join("|");
+    if (!nodes.length || layoutSignature === lastLayoutSignature.current) return;
+    lastLayoutSignature.current = layoutSignature;
+
+    const bounds = new THREE.Box3();
+    for (const position of map.values()) {
+      bounds.expandByPoint(new THREE.Vector3(...position));
+    }
+    const center = bounds.getCenter(new THREE.Vector3());
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const fov = THREE.MathUtils.degToRad(
+      (camera as THREE.PerspectiveCamera).fov ?? 45
+    );
+    const distance = Math.max(18, (sphere.radius / Math.sin(fov / 2)) * 1.4);
+    const direction = new THREE.Vector3(1, 0.8, 1).normalize();
+
+    controlsRef.current?.target.copy(center);
+    camera.position.copy(center).addScaledVector(direction, distance);
+    controlsRef.current?.update();
+  }, [camera, nodes]);
 
   useFrame(() => {
     if (!followedAgentId) return;
@@ -55,14 +95,32 @@ export function CameraRig({ nodes, agents, followedAgentId }: CameraRigProps) {
       makeDefault
       enableDamping
       dampingFactor={0.08}
-      minDistance={1}
-      maxDistance={150}
-      minPolarAngle={0}
-      maxPolarAngle={Math.PI}
+      minDistance={4}
+      maxDistance={220}
+      minPolarAngle={0.15}
+      maxPolarAngle={Math.PI / 2 - 0.1}
       enablePan={true}
-      panSpeed={1}
+      panSpeed={2.8}
+      keyPanSpeed={7}
+      mouseButtons={
+        panMode
+          ? {
+              LEFT: THREE.MOUSE.PAN,
+              MIDDLE: THREE.MOUSE.DOLLY,
+              RIGHT: THREE.MOUSE.ROTATE,
+            }
+          : {
+              LEFT: THREE.MOUSE.ROTATE,
+              MIDDLE: THREE.MOUSE.DOLLY,
+              RIGHT: THREE.MOUSE.PAN,
+            }
+      }
       rotateSpeed={1}
-      zoomSpeed={1.5}
+      zoomSpeed={1.2}
+      minAzimuthAngle={-Infinity}
+      maxAzimuthAngle={Infinity}
+      screenSpacePanning={true}
+      zoomToCursor
     />
   );
 }

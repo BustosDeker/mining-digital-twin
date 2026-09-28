@@ -13,6 +13,8 @@ interface ControlBarProps {
   onStep: () => void;
   onNewScenario: () => void;
   disabled: boolean;
+  panMode: boolean;
+  onPanModeChange: (value: boolean) => void;
   tunnelOpacity: number;
   onTunnelOpacityChange: (value: number) => void;
   showLabels: boolean;
@@ -26,16 +28,22 @@ function ControlButton({
   onClick,
   disabled,
   variant = "default",
+  pressed,
+  title,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   variant?: "default" | "primary";
+  pressed?: boolean;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
+      title={title}
       className={clsx(
         "rounded-sm border px-4 py-2 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary"
@@ -57,6 +65,8 @@ export function ControlBar({
   onStep,
   onNewScenario,
   disabled,
+  panMode,
+  onPanModeChange,
   tunnelOpacity,
   onTunnelOpacityChange,
   showLabels,
@@ -85,6 +95,14 @@ export function ControlBar({
       <ControlButton label={`+ ${t.controls.newScenario}`} onClick={onNewScenario} />
 
       <div className="mx-2 h-5 w-px bg-hairline" />
+
+      <ControlButton
+        label={`↔ ${t.controls.pan}`}
+        onClick={() => onPanModeChange(!panMode)}
+        variant={panMode ? "primary" : "default"}
+        pressed={panMode}
+        title={t.controls.panHint}
+      />
 
       <label className="flex items-center gap-2 font-mono text-[11px] text-steel">
         {t.controls.opacity}

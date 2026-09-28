@@ -2,7 +2,6 @@
 
 import { Component, ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Grid } from "@react-three/drei";
 import type { AgentSnapshot, MineEdge, MineNode } from "@/lib/types";
 import { Tunnels } from "./Tunnels";
 import { NodeMarkers } from "./NodeMarkers";
@@ -15,6 +14,7 @@ interface MineGraphSceneProps {
   edges: MineEdge[];
   agents: Record<string, AgentSnapshot>;
   tunnelOpacity: number;
+  panMode: boolean;
   showLabels: boolean;
   performanceMode: boolean;
   followedAgentId: string | null;
@@ -71,6 +71,7 @@ function SceneContent({
   edges,
   agents,
   tunnelOpacity,
+  panMode,
   showLabels,
   performanceMode,
   followedAgentId,
@@ -82,7 +83,7 @@ function SceneContent({
 
   return (
     <Canvas
-      camera={{ position: [10, 9, 10], fov: 50 }}
+      camera={{ position: [12, 12, 12], fov: 45, near: 0.1, far: 1000 }}
       dpr={performanceMode ? 1 : [1, 1.8]}
       shadows={false}
       gl={{
@@ -101,16 +102,6 @@ function SceneContent({
       <directionalLight position={[-5, 10, -5]} intensity={0.3} />
       <pointLight position={[0, 5, 0]} intensity={0.2} distance={30} />
 
-      <Grid
-        args={[80, 80]}
-        cellColor={theme === "dark" ? "#1E2724" : "#C7CAC3"}
-        sectionColor={theme === "dark" ? "#2A3532" : "#B4B8AF"}
-        fadeDistance={40}
-        fadeStrength={1.8}
-        position={[0, -0.02, 0]}
-        infiniteGrid
-      />
-
       <Tunnels nodes={nodes} edges={edges} opacity={tunnelOpacity} />
       <NodeMarkers nodes={nodes} showLabels={showLabels} />
       <Agents
@@ -120,7 +111,12 @@ function SceneContent({
         onSelectAgent={onSelectAgent}
         performanceMode={performanceMode}
       />
-      <CameraRig nodes={nodes} agents={agents} followedAgentId={followedAgentId} />
+      <CameraRig
+        nodes={nodes}
+        agents={agents}
+        followedAgentId={followedAgentId}
+        panMode={panMode}
+      />
     </Canvas>
   );
 }

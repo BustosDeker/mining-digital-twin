@@ -15,9 +15,21 @@ export interface TranslationShape {
     reset: string;
     step: string;
     newScenario: string;
+    pan: string;
+    panHint: string;
     opacity: string;
     labels: string;
     performance: string;
+  };
+  mapView: {
+    toolbar: string;
+    general: string;
+    top: string;
+    lateral: string;
+    incidents: string;
+    routes: string;
+    level: string;
+    allLevels: string;
   };
   scenario: {
     title: string;
@@ -126,9 +138,21 @@ export const translations: Record<Locale, TranslationShape> = {
       reset: "Reiniciar",
       step: "Paso +1s",
       newScenario: "Nuevo escenario",
+      pan: "Mover vista",
+      panHint: "Activa y arrastra para desplazar el circuito",
       opacity: "Opacidad",
       labels: "Etiquetas",
       performance: "Rendimiento",
+    },
+    mapView: {
+      toolbar: "Vistas del gemelo digital",
+      general: "General",
+      top: "Superior",
+      lateral: "Lateral",
+      incidents: "Incidentes",
+      routes: "Rutas",
+      level: "Nivel",
+      allLevels: "Todos",
     },
     scenario: {
       title: "Configurar escenario",
@@ -235,9 +259,21 @@ export const translations: Record<Locale, TranslationShape> = {
       reset: "Reset",
       step: "Step +1s",
       newScenario: "New scenario",
+      pan: "Pan view",
+      panHint: "Activate, then drag to move around the circuit",
       opacity: "Opacity",
       labels: "Labels",
       performance: "Performance",
+    },
+    mapView: {
+      toolbar: "Digital twin views",
+      general: "General",
+      top: "Top",
+      lateral: "Side",
+      incidents: "Incidents",
+      routes: "Routes",
+      level: "Level",
+      allLevels: "All",
     },
     scenario: {
       title: "Configure scenario",

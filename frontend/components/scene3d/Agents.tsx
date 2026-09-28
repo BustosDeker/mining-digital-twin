@@ -27,60 +27,108 @@ const COLOR_BY_STATUS: Record<string, string> = {
 function MinerFigure({ color, isPanicked, isFollowed }: { color: string; isPanicked: boolean; isFollowed: boolean }) {
   return (
     <group>
-      {/* Cuerpo del minero */}
-      <mesh position={[0, 0, 0]}>
-        <capsuleGeometry args={[0.12, 0.35, 4, 12]} />
+      {/* Torso */}
+      <mesh position={[0, 0.05, 0]}>
+        <boxGeometry args={[0.08, 0.15, 0.05]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.4}
-          roughness={0.4}
+          emissiveIntensity={0.3}
+          roughness={0.5}
           metalness={0.1}
         />
       </mesh>
       
-      {/* Cabeza del minero */}
-      <mesh position={[0, 0.28, 0]}>
-        <sphereGeometry args={[0.09, 12, 12]} />
+      {/* Cabeza */}
+      <mesh position={[0, 0.15, 0]}>
+        <sphereGeometry args={[0.04, 16, 16]} />
         <meshStandardMaterial
           color="#FFE4C4"
           emissive="#FFE4C4"
-          emissiveIntensity={0.2}
+          emissiveIntensity={0.15}
           roughness={0.6}
           metalness={0.05}
         />
       </mesh>
       
       {/* Casco de seguridad */}
-      <mesh position={[0, 0.32, 0]}>
-        <sphereGeometry args={[0.095, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      <mesh position={[0, 0.17, 0]}>
+        <sphereGeometry args={[0.045, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshStandardMaterial
           color="#FFD700"
           emissive="#FFD700"
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.25}
           roughness={0.3}
-          metalness={0.3}
+          metalness={0.4}
         />
       </mesh>
       
-      {/* Luz del casco */}
-      <mesh position={[0, 0.35, 0.08]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.03, 0.08, 8]} />
+      {/* Linterna del casco */}
+      <mesh position={[0, 0.18, 0.035]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.012, 0.035, 8]} />
         <meshBasicMaterial
           color="#FFFF00"
           transparent
-          opacity={0.8}
+          opacity={0.9}
+        />
+      </mesh>
+      
+      {/* Brazo izquierdo */}
+      <mesh position={[-0.06, 0.05, 0]}>
+        <capsuleGeometry args={[0.015, 0.1, 4, 8]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.3}
+          roughness={0.5}
+          metalness={0.1}
+        />
+      </mesh>
+      
+      {/* Brazo derecho */}
+      <mesh position={[0.06, 0.05, 0]}>
+        <capsuleGeometry args={[0.015, 0.1, 4, 8]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.3}
+          roughness={0.5}
+          metalness={0.1}
+        />
+      </mesh>
+      
+      {/* Pierna izquierda */}
+      <mesh position={[-0.025, -0.08, 0]}>
+        <capsuleGeometry args={[0.018, 0.12, 4, 8]} />
+        <meshStandardMaterial
+          color="#2C3E50"
+          emissive="#2C3E50"
+          emissiveIntensity={0.1}
+          roughness={0.6}
+          metalness={0.05}
+        />
+      </mesh>
+      
+      {/* Pierna derecha */}
+      <mesh position={[0.025, -0.08, 0]}>
+        <capsuleGeometry args={[0.018, 0.12, 4, 8]} />
+        <meshStandardMaterial
+          color="#2C3E50"
+          emissive="#2C3E50"
+          emissiveIntensity={0.1}
+          roughness={0.6}
+          metalness={0.05}
         />
       </mesh>
 
       {/* Halo de pánico */}
       {isPanicked && (
-        <mesh scale={[1.6, 1.6, 1.6]}>
-          <sphereGeometry args={[0.2, 16, 16]} />
+        <mesh scale={[1.4, 1.4, 1.4]}>
+          <sphereGeometry args={[0.1, 16, 16]} />
           <meshBasicMaterial
             color={SCENE_COLORS.agentPanicHalo}
             transparent
-            opacity={0.3}
+            opacity={0.25}
             depthWrite={false}
           />
         </mesh>
@@ -88,8 +136,8 @@ function MinerFigure({ color, isPanicked, isFollowed }: { color: string; isPanic
 
       {/* Indicador de seguimiento */}
       {isFollowed && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.35, 0]}>
-          <ringGeometry args={[0.25, 0.32, 32]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.15, 0]}>
+          <ringGeometry args={[0.12, 0.16, 32]} />
           <meshBasicMaterial 
             color={SCENE_COLORS.agentEvacuated}
             transparent
