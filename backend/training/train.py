@@ -93,6 +93,7 @@ def train_cv(
     epochs: int = 25,
     batch_size: int = 16,
     verbose: int = 0,
+    progress_callback: callable | None = None,
 ) -> CVTrainingResult:
     if architecture_name not in ARCHITECTURE_BUILDERS:
         raise ValueError(f"Arquitectura desconocida: {architecture_name}")
@@ -104,8 +105,17 @@ def train_cv(
 
     splits = get_cv_splits(y_names, subject_ids, strategy=cv_strategy)
     fold_results: list[CVFoldResult] = []
+    total_folds = len(splits)
 
-    for train_idx, test_idx, fold_id in splits:
+    for fold_idx, (train_idx, test_idx, fold_id) in enumerate(splits):
+        if progress_callback:
+            progress_callback(
+                fold=fold_idx + 1,
+                total_folds=total_folds,
+                epoch=0,
+                total_epochs=epochs,
+                model=architecture_name
+            )
         if len(np.unique(y_int[train_idx])) < 2:
             logger.warning("Fold omitido: menos de 2 clases en entrenamiento", extra={"fold_id": str(fold_id)})
             continue
@@ -125,6 +135,29 @@ def train_cv(
             c: len(y_train) / (n_classes * max(1, np.sum(y_train == c))) for c in range(n_classes)
         }
 
+        # Create custom callback for progress tracking
+        class ProgressCallback(tf.keras.callbacks.Callback):
+            def __init__(self, callback_fn, fold_idx, total_folds, model_name):
+                super().__init__()
+                self.callback_fn = callback_fn
+                self.fold_idx = fold_idx
+                self.total_folds = total_folds
+                self.model_name = model_name
+
+            def on_epoch_end(self, epoch, logs=None):
+                if self.callback_fn:
+                    self.callback_fn(
+                        fold=self.fold_idx,
+                        total_folds=self.total_folds,
+                        epoch=epoch + 1,
+                        total_epochs=epochs,
+                        model=self.model_name
+                    )
+
+        callbacks = []
+        if progress_callback:
+            callbacks.append(ProgressCallback(progress_callback, fold_idx + 1, total_folds, architecture_name))
+
         model.fit(
             X_train,
             y_train,
@@ -132,6 +165,7 @@ def train_cv(
             batch_size=batch_size,
             class_weight=class_weight,
             verbose=verbose,
+            callbacks=callbacks,
         )
 
         y_proba = model.predict(X_test, verbose=0)
@@ -179,6 +213,7 @@ def fit_final_model(
     epochs: int = 30,
     batch_size: int = 16,
     verbose: int = 0,
+    progress_callback: callable | None = None,
 ) -> tuple[tf.keras.Model, StandardScaler | None, list[str]]:
     """Ajusta el modelo FINAL de producción sobre TODOS los datos disponibles
     (tras validar la arquitectura/hiperparámetros mediante CV). Este modelo,
@@ -201,6 +236,28 @@ def fit_final_model(
     class_weight = {
         c: len(y_int) / (n_classes * max(1, np.sum(y_int == c))) for c in range(n_classes)
     }
-    model.fit(X_fit, y_int, epochs=epochs, batch_size=batch_size, class_weight=class_weight, verbose=verbose)
+
+    # Create custom callback for progress tracking
+    class ProgressCallback(tf.keras.callbacks.Callback):
+        def __init__(self, callback_fn, model_name):
+            super().__init__()
+            self.callback_fn = callback_fn
+            self.model_name = model_name
+
+        def on_epoch_end(self, epoch, logs=None):
+            if self.callback_fn:
+                self.callback_fn(
+                    fold=1,
+                    total_folds=1,
+                    epoch=epoch + 1,
+                    total_epochs=epochs,
+                    model=self.model_name
+                )
+
+    callbacks = []
+    if progress_callback:
+        callbacks.append(ProgressCallback(progress_callback, architecture_name))
+
+    model.fit(X_fit, y_int, epochs=epochs, batch_size=batch_size, class_weight=class_weight, verbose=verbose, callbacks=callbacks)
 
     return model, scaler, class_names

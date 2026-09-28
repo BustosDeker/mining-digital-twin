@@ -113,3 +113,28 @@ class SyntheticWESADLoader(DatasetLoader):
             label_names=WESAD_LABEL_NAMES,
             metadata={"synthetic": True, "base_heart_rate_bpm": base_hr, "base_eda_level": base_eda},
         )
+
+
+def generate_synthetic_data(n_subjects: int = 5, n_samples_per_subject: int = 100, sequence_length: int = 50) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Genera datos sintéticos para entrenamiento rápido.
+    
+    Returns:
+        X: Array de features (n_samples, sequence_length, n_channels) para arquitecturas CNN
+        y: Array de etiquetas (n_samples,)
+        subject_ids: Array de IDs de sujetos (n_samples,)
+    """
+    rng = np.random.default_rng(42)
+    
+    # Generar features sintéticos con forma 3D para arquitecturas CNN
+    n_samples = n_subjects * n_samples_per_subject
+    n_channels = 8  # ecg, eda, emg, temp, resp, acc_x, acc_y, acc_z
+    
+    X = rng.normal(0, 1, size=(n_samples, sequence_length, n_channels))
+    
+    # Generar etiquetas (0: baseline, 1: stress, 2: amusement)
+    y = rng.integers(0, 3, size=n_samples)
+    
+    # Generar subject_ids
+    subject_ids = np.repeat(np.arange(n_subjects), n_samples_per_subject)
+    
+    return X, y, subject_ids

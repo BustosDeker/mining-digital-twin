@@ -1,0 +1,12 @@
+{
+  "architecture_name": "attention",
+  "version_id": "20260927_195403",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-27T19:54:03.493043",
+  "class_names": [
+    "0",
+    "1",
+    "2"
+  ]
+}

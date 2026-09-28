@@ -1,0 +1,12 @@
+{
+  "architecture_name": "cnn_lstm",
+  "version_id": "20260927_195021",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-27T19:50:21.419837",
+  "class_names": [
+    "0",
+    "1",
+    "2"
+  ]
+}
