@@ -23,6 +23,7 @@ imbalanced-learn==0.13.0
 # ==== EDA / visualización de artefactos (Fase 5) ====
 matplotlib==3.10.0
 seaborn==0.13.2
+plotly==5.24.1
 
 # ==== Estadística (Fase 7) ====
 scikit-posthocs==0.11.2

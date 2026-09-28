@@ -34,6 +34,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.graph_objects as go
+import plotly.express as px
 
 from backend.training import synthetic_wesad, wesad_loader  # noqa: F401 - registran los datasets
 from backend.training.dataset_loader import DATASET_REGISTRY, get_loader
@@ -51,6 +53,7 @@ st.set_page_config(page_title="Motor IA — CRISP-DM Pipeline", layout="wide")
 settings = get_settings()
 
 CV_RESULTS_PATH = settings.ARTIFACTS_DIR / "cv_results.json"
+STATS_RESULTS_PATH = settings.ARTIFACTS_DIR / "stats_results.json"
 
 def load_cv_results_from_disk():
     """Load CV results from disk if available."""
@@ -69,13 +72,32 @@ def save_cv_results_to_disk(results, config):
     with open(CV_RESULTS_PATH, "w") as f:
         json.dump({"results": results, "config": config}, f, indent=2)
 
+def load_stats_results_from_disk():
+    """Load stats results from disk if available."""
+    if STATS_RESULTS_PATH.exists():
+        try:
+            with open(STATS_RESULTS_PATH, "r") as f:
+                data = json.load(f)
+                return data.get("results"), data.get("config")
+        except Exception as e:
+            logger.warning(f"Error loading stats results from disk: {e}")
+    return None, None
+
+def save_stats_results_to_disk(results, config):
+    """Save stats results to disk."""
+    STATS_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(STATS_RESULTS_PATH, "w") as f:
+        json.dump({"results": results, "config": config}, f, indent=2)
+
 # Initialize session state
 if "cv_results" not in st.session_state:
     st.session_state.cv_results, st.session_state.last_cv_config = load_cv_results_from_disk()
 if "stats_results" not in st.session_state:
-    st.session_state.stats_results = None
+    st.session_state.stats_results, st.session_state.last_stats_config = load_stats_results_from_disk()
 if "last_cv_config" not in st.session_state:
     st.session_state.last_cv_config = None
+if "last_stats_config" not in st.session_state:
+    st.session_state.last_stats_config = None
 
 def load_wesad_data_for_training(n_subjects: int = None, architecture: str = "cnn_lstm") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Carga datos reales de WESAD y los procesa para entrenamiento.
@@ -532,8 +554,12 @@ with tab_cv:
                 if st.button("🗑️ Limpiar resultados"):
                     st.session_state.cv_results = None
                     st.session_state.last_cv_config = None
+                    st.session_state.stats_results = None
+                    st.session_state.last_stats_config = None
                     if CV_RESULTS_PATH.exists():
                         CV_RESULTS_PATH.unlink()
+                    if STATS_RESULTS_PATH.exists():
+                        STATS_RESULTS_PATH.unlink()
                     st.rerun()
             
             df_cv_results = pd.DataFrame(st.session_state.cv_results)
@@ -662,6 +688,12 @@ with tab_cv:
                     st.session_state.last_cv_config = current_config
                     save_cv_results_to_disk(all_cv_results, current_config)
                     
+                    # Clear stats results since CV changed
+                    st.session_state.stats_results = None
+                    st.session_state.last_stats_config = None
+                    if STATS_RESULTS_PATH.exists():
+                        STATS_RESULTS_PATH.unlink()
+                    
                     if all_cv_results:
                         df_cv_results = pd.DataFrame(all_cv_results)
                         
@@ -726,150 +758,191 @@ with tab_stats:
     st.checkbox("Nemenyi post-hoc test (diferencias específicas)", value=True, key="stats_nemenyi")
     st.checkbox("Shapiro-Wilk (normalidad)", value=False, key="stats_shapiro")
     
+    # Display previous stats results if available
+    if st.session_state.stats_results:
+        st.info("📊 Resultados de pruebas estadísticas previos disponibles")
+        if st.button("🗑️ Limpiar resultados estadísticos"):
+            st.session_state.stats_results = None
+            st.session_state.last_stats_config = None
+            if STATS_RESULTS_PATH.exists():
+                STATS_RESULTS_PATH.unlink()
+            st.rerun()
+        
+        df_stats = pd.DataFrame(st.session_state.stats_results)
+        st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas (Previos)")
+        st.dataframe(df_stats, use_container_width=True)
+        st.divider()
+    
     if st.button("▶️ Ejecutar Pruebas Estadísticas", type="primary"):
         if not selected_models:
             st.error("Seleccione al menos un modelo para comparar.")
         elif not st.session_state.cv_results:
             st.error("Primero ejecute la validación cruzada para obtener resultados.")
         else:
-            st.success("Pruebas estadísticas iniciadas...")
-            
-            # Extract CV results for selected models
-            cv_results = st.session_state.cv_results
-            model_metrics = {}
-            
-            for model in selected_models:
-                model_data = [r for r in cv_results if r["Arquitectura"] == model]
-                if model_data:
-                    model_metrics[model] = {
-                        "accuracy": [float(r["Accuracy"]) for r in model_data],
-                        "f1": [float(r["F1-Score"]) for r in model_data]
-                    }
-            
-            if len(model_metrics) < 2:
-                st.error("Se necesitan al menos 2 modelos con resultados de CV para comparación.")
-            else:
-                # Real statistical tests
-                stats_results = []
+            with st.spinner("Ejecutando pruebas estadísticas... Esto puede tomar unos segundos."):
+                # Extract CV results for selected models
+                cv_results = st.session_state.cv_results
+                model_metrics = {}
                 
-                # Friedman test
-                use_friedman = st.session_state.get("stats_friedman", True)
-                if use_friedman and len(model_metrics) >= 3:
-                    accuracy_values = [model_metrics[m]["accuracy"] for m in selected_models if m in model_metrics]
-                    if len(accuracy_values) >= 3:
+                for model in selected_models:
+                    model_data = [r for r in cv_results if r["Arquitectura"] == model]
+                    if model_data:
+                        model_metrics[model] = {
+                            "accuracy": [float(r["Accuracy"]) for r in model_data],
+                            "f1": [float(r["F1-Score"]) for r in model_data]
+                        }
+                
+                if len(model_metrics) < 2:
+                    st.error("Se necesitan al menos 2 modelos con resultados de CV para comparación.")
+                else:
+                    # Real statistical tests
+                    stats_results = []
+                    
+                    # Friedman test
+                    use_friedman = st.session_state.get("stats_friedman", True)
+                    if use_friedman and len(model_metrics) >= 3:
+                        accuracy_values = [model_metrics[m]["accuracy"] for m in selected_models if m in model_metrics]
+                        if len(accuracy_values) >= 3:
+                            try:
+                                stat, p_value = friedmanchisquare(*accuracy_values)
+                                stats_results.append({
+                                    "Prueba": "Friedman Chi-square",
+                                    "Valor": f"{stat:.4f}",
+                                    "p-value": f"{p_value:.4f}",
+                                    "Interpretación": "Significativo" if p_value < 0.05 else "No significativo"
+                                })
+                            except Exception as e:
+                                st.warning(f"Friedman test falló: {e}")
+                    
+                    # Wilcoxon test (best vs second best)
+                    use_wilcoxon = st.session_state.get("stats_wilcoxon", True)
+                    if use_wilcoxon and len(model_metrics) >= 2:
+                        # Find best and second best by mean accuracy
+                        mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
+                        sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
+                        best_model, second_best = sorted_models[0][0], sorted_models[1][0]
+                        
                         try:
-                            stat, p_value = friedmanchisquare(*accuracy_values)
+                            stat, p_value = wilcoxon(
+                                model_metrics[best_model]["accuracy"],
+                                model_metrics[second_best]["accuracy"]
+                            )
                             stats_results.append({
-                                "Prueba": "Friedman Chi-square",
+                                "Prueba": f"Wilcoxon ({best_model} vs {second_best})",
                                 "Valor": f"{stat:.4f}",
                                 "p-value": f"{p_value:.4f}",
                                 "Interpretación": "Significativo" if p_value < 0.05 else "No significativo"
                             })
                         except Exception as e:
-                            st.warning(f"Friedman test falló: {e}")
-                
-                # Wilcoxon test (best vs second best)
-                use_wilcoxon = st.session_state.get("stats_wilcoxon", True)
-                if use_wilcoxon and len(model_metrics) >= 2:
-                    # Find best and second best by mean accuracy
+                            st.warning(f"Wilcoxon test falló: {e}")
+                    
+                    # Shapiro-Wilk test for normality
+                    use_shapiro = st.session_state.get("stats_shapiro", False)
+                    if use_shapiro:
+                        for model in selected_models:
+                            if model in model_metrics:
+                                try:
+                                    stat, p_value = shapiro(model_metrics[model]["accuracy"])
+                                    stats_results.append({
+                                        "Prueba": f"Shapiro-Wilk ({model})",
+                                        "Valor": f"{stat:.4f}",
+                                        "p-value": f"{p_value:.4f}",
+                                        "Interpretación": "Normal" if p_value > 0.05 else "No normal"
+                                    })
+                                except Exception as e:
+                                    st.warning(f"Shapiro-Wilk test falló para {model}: {e}")
+                    
+                    # Display results
+                    st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas")
+                    if stats_results:
+                        df_stats = pd.DataFrame(stats_results)
+                        st.dataframe(df_stats, use_container_width=True)
+                    else:
+                        st.info("No se pudieron ejecutar las pruebas estadísticas.")
+                    
+                    st.info("**Interpretación:** Las pruebas estadísticas validan si las diferencias observadas entre modelos "
+                           "son estadísticamente significativas y no producto del azar.")
+                    st.success("**Explicabilidad:** La significancia estadística respalda la selección del mejor modelo con "
+                              "fundamentos matemáticos rigurosos, esencial para publicación científica.")
+                    
+                    # Generate interactive figures with Plotly
+                    st.subheader("📊 FIGURA 4: Comparación Visual de Modelos (Interactivo)")
+                    
+                    model_names = selected_models
+                    accuracy_means = [np.mean(model_metrics[m]["accuracy"]) for m in model_names if m in model_metrics]
+                    f1_means = [np.mean(model_metrics[m]["f1"]) for m in model_names if m in model_metrics]
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(
+                        name='Accuracy',
+                        x=model_names,
+                        y=accuracy_means,
+                        marker_color='rgba(55, 128, 191, 0.8)'
+                    ))
+                    fig.add_trace(go.Bar(
+                        name='F1-Score',
+                        x=model_names,
+                        y=f1_means,
+                        marker_color='rgba(219, 64, 82, 0.8)'
+                    ))
+                    
+                    fig.update_layout(
+                        barmode='group',
+                        xaxis_title='Arquitectura',
+                        yaxis_title='Score',
+                        title='Comparación de Métricas por Arquitectura',
+                        yaxis_range=[0.5, 1.0],
+                        height=500
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.info("**Interpretación:** El gráfico de barras interactivo muestra visualmente el rendimiento relativo de cada arquitectura. "
+                           "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
+                    st.success("**Explicabilidad:** La visualización interactiva facilita la identificación rápida del mejor modelo y "
+                              "permite comunicar resultados a stakeholders no técnicos.")
+                    
+                    # Nemenyi-like ranking based on mean accuracy
+                    st.subheader("📊 FIGURA 5: Ranking de Modelos (por Accuracy Promedio - Interactivo)")
+                    
                     mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
                     sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
-                    best_model, second_best = sorted_models[0][0], sorted_models[1][0]
+                    rankings = {model: rank + 1 for rank, (model, _) in enumerate(sorted_models)}
                     
-                    try:
-                        stat, p_value = wilcoxon(
-                            model_metrics[best_model]["accuracy"],
-                            model_metrics[second_best]["accuracy"]
-                        )
-                        stats_results.append({
-                            "Prueba": f"Wilcoxon ({best_model} vs {second_best})",
-                            "Valor": f"{stat:.4f}",
-                            "p-value": f"{p_value:.4f}",
-                            "Interpretación": "Significativo" if p_value < 0.05 else "No significativo"
-                        })
-                    except Exception as e:
-                        st.warning(f"Wilcoxon test falló: {e}")
-                
-                # Shapiro-Wilk test for normality
-                use_shapiro = st.session_state.get("stats_shapiro", False)
-                if use_shapiro:
-                    for model in selected_models:
-                        if model in model_metrics:
-                            try:
-                                stat, p_value = shapiro(model_metrics[model]["accuracy"])
-                                stats_results.append({
-                                    "Prueba": f"Shapiro-Wilk ({model})",
-                                    "Valor": f"{stat:.4f}",
-                                    "p-value": f"{p_value:.4f}",
-                                    "Interpretación": "Normal" if p_value > 0.05 else "No normal"
-                                })
-                            except Exception as e:
-                                st.warning(f"Shapiro-Wilk test falló para {model}: {e}")
-                
-                # Display results
-                st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas")
-                if stats_results:
-                    df_stats = pd.DataFrame(stats_results)
-                    st.dataframe(df_stats, use_container_width=True)
-                else:
-                    st.info("No se pudieron ejecutar las pruebas estadísticas.")
-                
-                st.info("**Interpretación:** Las pruebas estadísticas validan si las diferencias observadas entre modelos "
-                       "son estadísticamente significativas y no producto del azar.")
-                st.success("**Explicabilidad:** La significancia estadística respalda la selección del mejor modelo con "
-                          "fundamentos matemáticos rigurosos, esencial para publicación científica.")
-                
-                # Generate real figures based on CV results
-                st.subheader("📊 FIGURA 4: Comparación Visual de Modelos")
-                fig, ax = plt.subplots(figsize=(12, 6))
-                
-                model_names = selected_models
-                accuracy_means = [np.mean(model_metrics[m]["accuracy"]) for m in model_names if m in model_metrics]
-                f1_means = [np.mean(model_metrics[m]["f1"]) for m in model_names if m in model_metrics]
-                
-                x = np.arange(len(model_names))
-                width = 0.35
-                ax.bar(x - width/2, accuracy_means, width, label='Accuracy', alpha=0.8)
-                ax.bar(x + width/2, f1_means, width, label='F1-Score', alpha=0.8)
-                ax.set_xlabel('Arquitectura')
-                ax.set_ylabel('Score')
-                ax.set_title('Comparación de Métricas por Arquitectura')
-                ax.set_xticks(x)
-                ax.set_xticklabels(model_names, rotation=45, ha='right')
-                ax.legend()
-                ax.grid(axis='y', alpha=0.3)
-                ax.set_ylim(0.5, 1.0)
-                st.pyplot(fig)
-                st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
-                       "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
-                st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
-                          "permite comunicar resultados a stakeholders no técnicos.")
-                
-                # Nemenyi-like ranking based on mean accuracy
-                st.subheader("📊 FIGURA 5: Ranking de Modelos (por Accuracy Promedio)")
-                fig, ax = plt.subplots(figsize=(10, 6))
-                
-                mean_acc = {m: np.mean(v["accuracy"]) for m, v in model_metrics.items()}
-                sorted_models = sorted(mean_acc.items(), key=lambda x: x[1], reverse=True)
-                rankings = {model: rank + 1 for rank, (model, _) in enumerate(sorted_models)}
-                
-                model_names_plot = [m for m, _ in sorted_models]
-                ranking_values = [rankings[m] for m in model_names_plot]
-                colors = ['green' if r == 1 else 'orange' if r == 2 else 'red' for r in ranking_values]
-                
-                ax.barh(model_names_plot, ranking_values, color=colors)
-                ax.set_xlabel("Ranking (1 = mejor)")
-                ax.set_title("Ranking de Modelos según Accuracy Promedio")
-                ax.invert_yaxis()
-                ax.grid(axis='x', alpha=0.3)
-                st.pyplot(fig)
-                st.info("**Interpretación:** El diagrama muestra el ranking de cada modelo según accuracy promedio. "
-                       "Modelos con ranking 1 son los mejores.")
-                st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
-                          "y comparar el rendimiento relativo entre arquitecturas.")
-                
-                # Save stats results to session state
-                st.session_state.stats_results = stats_results
+                    model_names_plot = [m for m, _ in sorted_models]
+                    ranking_values = [rankings[m] for m in model_names_plot]
+                    colors = ['green' if r == 1 else 'orange' if r == 2 else 'red' for r in ranking_values]
+                    
+                    fig = go.Figure(go.Bar(
+                        x=ranking_values,
+                        y=model_names_plot,
+                        orientation='h',
+                        marker_color=colors,
+                        text=ranking_values,
+                        textposition='auto'
+                    ))
+                    
+                    fig.update_layout(
+                        xaxis_title="Ranking (1 = mejor)",
+                        title="Ranking de Modelos según Accuracy Promedio",
+                        height=400
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.info("**Interpretación:** El diagrama interactivo muestra el ranking de cada modelo según accuracy promedio. "
+                           "Modelos con ranking 1 son los mejores.")
+                    st.success("**Explicabilidad:** El ranking visual interactivo permite identificar rápidamente el mejor modelo "
+                              "y comparar el rendimiento relativo entre arquitecturas.")
+                    
+                    # Save stats results to session state and disk
+                    st.session_state.stats_results = stats_results
+                    stats_config = {
+                        "models": tuple(sorted(selected_models)),
+                        "tests": {
+                            "wilcoxon": use_wilcoxon,
+                            "friedman": use_friedman,
+                            "shapiro": use_shapiro
+                        }
+                    }
+                    st.session_state.last_stats_config = stats_config
+                    save_stats_results_to_disk(stats_results, stats_config)
 
 with tab_selection:
     st.header("🏆 Selección del Mejor Modelo")
