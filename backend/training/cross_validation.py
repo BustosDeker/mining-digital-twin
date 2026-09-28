@@ -48,7 +48,7 @@ def stratified_group_kfold_splits(
 
 
 def get_cv_splits(
-    labels: np.ndarray, subject_ids: np.ndarray, strategy: str | None = None
+    labels: np.ndarray, subject_ids: np.ndarray, strategy: str | None = None, n_folds: int | None = None
 ) -> list[tuple[np.ndarray, np.ndarray, str]]:
     """Punto de entrada único: usa `settings.CV_STRATEGY` salvo que se
     indique lo contrario explícitamente.
@@ -61,6 +61,6 @@ def get_cv_splits(
     if strategy == "kfold":
         return [
             (train_idx, test_idx, f"fold_{fold_idx}")
-            for train_idx, test_idx, fold_idx in stratified_group_kfold_splits(labels, subject_ids)
+            for train_idx, test_idx, fold_idx in stratified_group_kfold_splits(labels, subject_ids, n_splits=n_folds)
         ]
     raise ValueError(f"Estrategia de CV desconocida: {strategy}")

@@ -90,6 +90,7 @@ def train_cv(
     subject_ids: np.ndarray,
     hyperparams: CNNLSTMHyperparams | FeaturesMLPHyperparams | None = None,
     cv_strategy: str | None = None,
+    n_folds: int | None = None,
     epochs: int = 25,
     batch_size: int = 16,
     verbose: int = 0,
@@ -103,7 +104,7 @@ def train_cv(
     y_int = np.array([label_to_int[name] for name in y_names])
     n_classes = len(class_names)
 
-    splits = get_cv_splits(y_names, subject_ids, strategy=cv_strategy)
+    splits = get_cv_splits(y_names, subject_ids, strategy=cv_strategy, n_folds=n_folds)
     fold_results: list[CVFoldResult] = []
     total_folds = len(splits)
 

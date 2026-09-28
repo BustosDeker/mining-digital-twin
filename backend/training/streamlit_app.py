@@ -462,6 +462,7 @@ with tab_cv:
                             batch_size=cv_batch_size,
                             verbose=0,
                             cv_strategy=cv_strategy_current.split()[0].lower() if "LOSO" in cv_strategy_current else "kfold",
+                            n_folds=n_folds_current,
                             progress_callback=cv_progress_callback
                         )
                         
