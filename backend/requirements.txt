@@ -34,6 +34,7 @@ streamlit==1.41.1
 
 # ==== Reportes PDF (Fase 8) ====
 reportlab==4.2.5
+python-docx==1.1.2
 
 # ==== Utilidades generales ====
 python-dotenv==1.0.1
