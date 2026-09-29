@@ -1,19 +1,20 @@
 {
-  "architecture_name": "cnn_lstm",
-  "version_id": "20260927_195021",
-  "activated_at": "2026-09-27T23:16:06.641213",
-  "selection_criteria": "Precisi\u00f3n (Accuracy)",
-  "metric_value": 0.36665000000000003,
+  "architecture_name": "features_mlp",
+  "version_id": "20260929_112053",
+  "activated_at": "2026-09-29T11:20:54.682245",
+  "selection_criteria": "Auto-activated after training",
   "metadata": {
-    "architecture_name": "cnn_lstm",
-    "version_id": "20260927_195021",
+    "architecture_name": "features_mlp",
+    "version_id": "20260929_112053",
     "epochs": 50,
     "batch_size": 32,
-    "trained_at": "2026-09-27T19:50:21.419837",
+    "trained_at": "2026-09-29T11:20:54.671765",
     "class_names": [
-      "0",
-      "1",
-      "2"
-    ]
+      "amusement",
+      "baseline",
+      "stress"
+    ],
+    "model_size_mb": 12.89,
+    "inference_latency_ms": 529.29
   }
 }

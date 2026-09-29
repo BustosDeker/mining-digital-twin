@@ -1,0 +1,14 @@
+{
+  "architecture_name": "features_mlp",
+  "version_id": "20260929_112053",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-29T11:20:54.671765",
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "model_size_mb": 12.89,
+  "inference_latency_ms": 529.29
+}

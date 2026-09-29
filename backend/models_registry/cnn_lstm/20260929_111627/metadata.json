@@ -1,0 +1,14 @@
+{
+  "architecture_name": "cnn_lstm",
+  "version_id": "20260929_111627",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-29T11:16:31.107932",
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "model_size_mb": 0.6,
+  "inference_latency_ms": 2659.38
+}
