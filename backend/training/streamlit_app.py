@@ -45,7 +45,7 @@ from backend.training.train import fit_final_model, train_cv
 from backend.preprocessing.windowing import create_windows
 from backend.utils.config import get_settings
 from backend.utils.logging_config import get_logger
-from backend.reports import generate_pdf_report, generate_word_report
+from backend.reports import generate_pdf_report, generate_training_report_to_memory, generate_word_report
 from scipy.stats import friedmanchisquare, wilcoxon, shapiro
 from scipy.stats import rankdata
 
@@ -794,6 +794,43 @@ with tab_cv:
                         with col3:
                             st.metric("Precision Promedio", f"{np.mean(prec_values):.4f}")
                             st.metric("Recall Promedio", f"{np.mean(rec_values):.4f}")
+                        
+                        # Add confusion matrix visualization for previous results
+                        st.divider()
+                        st.subheader(f"Matriz de Confusión Agregada - {model}")
+                        
+                        # Check if we have the necessary data for confusion matrix
+                        if "y_true" in model_results[0] and "y_pred" in model_results[0]:
+                            # Aggregate confusion matrix across all folds
+                            from sklearn.metrics import confusion_matrix
+                            class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
+                            n_classes = len(class_names)
+                            cm_agg = np.zeros((n_classes, n_classes), dtype=int)
+                            
+                            for r in model_results:
+                                y_true = np.array(r["y_true"])
+                                y_pred = np.array(r["y_pred"])
+                                cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+                            
+                            # Plot confusion matrix
+                            fig, ax = plt.subplots(figsize=(5, 4))
+                            sns.heatmap(cm_agg, annot=True, fmt="d", cmap="Blues", 
+                                       xticklabels=class_names, yticklabels=class_names, ax=ax)
+                            ax.set_xlabel("Predicho")
+                            ax.set_ylabel("Real")
+                            ax.set_title(f"Matriz de Confusión Agregada - {model}")
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                            plt.close(fig)
+                            
+                            st.info("**Interpretación:** La matriz de confusión muestra las predicciones correctas e incorrectas "
+                                   "para cada clase. Valores en la diagonal indican predicciones correctas.")
+                            st.success("**Explicabilidad:** La matriz de confusión permite identificar qué clases son "
+                                      "más difíciles de clasificar y si hay sesgos hacia clases específicas.")
+                        else:
+                            st.warning("⚠️ Los resultados de validación cruzada previos no contienen los datos necesarios "
+                                      "(y_true, y_pred) para generar la matriz de confusión. "
+                                      "Ejecute nuevamente la validación cruzada para ver las matrices de confusión.")
             
             st.divider()
         
@@ -1033,27 +1070,38 @@ with tab_cv:
                                     st.divider()
                                     st.subheader(f"Matriz de Confusión Agregada - {model}")
                                     
-                                    # Aggregate confusion matrix across all folds
-                                    from sklearn.metrics import confusion_matrix
-                                    class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
-                                    n_classes = len(class_names)
-                                    cm_agg = np.zeros((n_classes, n_classes), dtype=int)
-                                    
-                                    for r in model_results:
-                                        y_true = np.array(r["y_true"])
-                                        y_pred = np.array(r["y_pred"])
-                                        cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
-                                    
-                                    # Plot confusion matrix
-                                    fig, ax = plt.subplots(figsize=(5, 4))
-                                    sns.heatmap(cm_agg, annot=True, fmt="d", cmap="Blues", 
-                                               xticklabels=class_names, yticklabels=class_names, ax=ax)
-                                    ax.set_xlabel("Predicho")
-                                    ax.set_ylabel("Real")
-                                    ax.set_title(f"Matriz de Confusión Agregada - {model}")
-                                    plt.tight_layout()
-                                    st.pyplot(fig)
-                                    plt.close(fig)
+                                    # Check if we have the necessary data for confusion matrix
+                                    if "y_true" in model_results[0] and "y_pred" in model_results[0]:
+                                        # Aggregate confusion matrix across all folds
+                                        from sklearn.metrics import confusion_matrix
+                                        class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
+                                        n_classes = len(class_names)
+                                        cm_agg = np.zeros((n_classes, n_classes), dtype=int)
+                                        
+                                        for r in model_results:
+                                            y_true = np.array(r["y_true"])
+                                            y_pred = np.array(r["y_pred"])
+                                            cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+                                        
+                                        # Plot confusion matrix
+                                        fig, ax = plt.subplots(figsize=(5, 4))
+                                        sns.heatmap(cm_agg, annot=True, fmt="d", cmap="Blues", 
+                                                   xticklabels=class_names, yticklabels=class_names, ax=ax)
+                                        ax.set_xlabel("Predicho")
+                                        ax.set_ylabel("Real")
+                                        ax.set_title(f"Matriz de Confusión Agregada - {model}")
+                                        plt.tight_layout()
+                                        st.pyplot(fig)
+                                        plt.close(fig)
+                                        
+                                        st.info("**Interpretación:** La matriz de confusión muestra las predicciones correctas e incorrectas "
+                                               "para cada clase. Valores en la diagonal indican predicciones correctas.")
+                                        st.success("**Explicabilidad:** La matriz de confusión permite identificar qué clases son "
+                                                  "más difíciles de clasificar y si hay sesgos hacia clases específicas.")
+                                    else:
+                                        st.warning("⚠️ Los resultados de validación cruzada previos no contienen los datos necesarios "
+                                                  "(y_true, y_pred) para generar la matriz de confusión. "
+                                                  "Ejecute nuevamente la validación cruzada para ver las matrices de confusión.")
                         
                         st.info("**Interpretación:** Esta tabla muestra los resultados de validación cruzada para cada arquitectura. "
                                "La consistencia entre folds indica robustez del modelo.")
@@ -1106,6 +1154,37 @@ with tab_stats:
         df_stats = pd.DataFrame(st.session_state.stats_results)
         st.subheader("📊 TABLA 4: Resultados de Pruebas Estadísticas (Previos)")
         st.dataframe(df_stats, use_container_width=True)
+        
+        # Add detailed interpretation for each test type
+        st.divider()
+        st.subheader("📖 Interpretación Detallada por Tipo de Prueba")
+        
+        # Friedman test interpretation
+        friedman_results = [r for r in st.session_state.stats_results if "Friedman" in r["Prueba"]]
+        if friedman_results:
+            st.info("**Friedman Chi-square:** Prueba no paramétrica para comparar múltiples modelos relacionados. "
+                   "Un p-valor < 0.05 indica que al menos un modelo difiere significativamente de los demás. "
+                   "Es robusto cuando los datos no siguen distribución normal.")
+        
+        # Wilcoxon test interpretation
+        wilcoxon_results = [r for r in st.session_state.stats_results if "Wilcoxon" in r["Prueba"]]
+        if wilcoxon_results:
+            st.info("**Wilcoxon signed-rank:** Prueba no paramétrica para comparar dos modelos pareados. "
+                   "Evalúa si las diferencias entre los dos mejores modelos son significativas. "
+                   "Ideal para comparaciones directas cuando el número de folds es pequeño.")
+        
+        # Shapiro-Wilk test interpretation
+        shapiro_results = [r for r in st.session_state.stats_results if "Shapiro-Wilk" in r["Prueba"]]
+        if shapiro_results:
+            st.info("**Shapiro-Wilk:** Prueba de normalidad para verificar si los datos siguen distribución gaussiana. "
+                   "Un p-valor > 0.05 indica normalidad (p-valor < 0.05 indica no normalidad). "
+                   "Es importante porque pruebas paramétricas requieren normalidad; si no hay normalidad, "
+                   "se deben usar pruebas no paramétricas como Friedman y Wilcoxon.")
+        
+        st.success("**Explicabilidad general:** Estas pruebas estadísticas proporcionan fundamentos matemáticos "
+                  "rigurosos para justificar la selección del modelo, esencial para publicación científica y "
+                  "para asegurar que las diferencias observadas no son producto del azar.")
+        
         st.divider()
         
         # Regenerate visualizations if data is available
@@ -1144,6 +1223,10 @@ with tab_stats:
                 height=500
             )
             st.plotly_chart(fig, use_container_width=True)
+            st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
+                   "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
+            st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
+                      "permite comunicar resultados a stakeholders no técnicos.")
             
             # Box plot
             st.subheader("📊 FIGURA 5: Distribución de Accuracy por Modelo (Box Plot)")
@@ -1163,6 +1246,11 @@ with tab_stats:
                 height=500
             )
             st.plotly_chart(fig_box, use_container_width=True)
+            st.info("**Interpretación:** El box plot muestra la distribución de accuracy por modelo. "
+                   "La caja representa el rango intercuartílico (50% central de los datos), la línea es la mediana. "
+                   "Puntos fuera de la caja son outliers (folds con rendimiento atípico).")
+            st.success("**Explicabilidad:** La variabilidad entre folds indica la consistencia del modelo. "
+                      "Cajas más pequeñas y menos outliers indican rendimiento más estable y generalizable.")
             
             # Violin plot
             st.subheader("📊 FIGURA 6: Distribución de F1-Score por Modelo (Violin Plot)")
@@ -1181,6 +1269,10 @@ with tab_stats:
                 height=500
             )
             st.plotly_chart(fig_violin, use_container_width=True)
+            st.info("**Interpretación:** El violin plot muestra la distribución de F1-score por modelo. "
+                   "El ancho indica la densidad de datos en cada valor, permitiendo ver la forma de la distribución.")
+            st.success("**Explicabilidad:** Esta visualización combina el box plot con la densidad de probabilidad, "
+                      "mostrando tanto la tendencia central como la variabilidad de manera más detallada.")
             
             # Scatter plot
             st.subheader("📊 FIGURA 7: Accuracy vs F1-Score (Scatter Plot)")
@@ -1203,6 +1295,10 @@ with tab_stats:
                 height=500
             )
             st.plotly_chart(fig_scatter, use_container_width=True)
+            st.info("**Interpretación:** El scatter plot muestra la relación entre accuracy y F1-score para cada fold. "
+                   "Puntos cerca de la diagonal (1:1) indican balance entre precision y recall.")
+            st.success("**Explicabilidad:** Esta visualización ayuda a identificar si un modelo tiene trade-offs entre "
+                      "accuracy y F1-score, lo cual es importante para aplicaciones donde ambas métricas son críticas.")
             
             # Heatmap
             st.subheader("📊 FIGURA 8: Correlación de Accuracy entre Modelos")
@@ -1233,6 +1329,10 @@ with tab_stats:
                 height=500
             )
             st.plotly_chart(fig_heatmap, use_container_width=True)
+            st.info("**Interpretación:** La matriz de correlación muestra qué tan similares son los rendimientos de los diferentes modelos en los mismos folds. "
+                   "Valores cercanos a 1 indican comportamientos similares, valores bajos sugieren que los modelos capturan patrones diferentes.")
+            st.success("**Explicabilidad:** Modelos con alta correlación tienden a cometer errores similares en los mismos folds, "
+                      "lo cual sugiere que podrían capturar patrones redundantes. Baja correlación indica complementariedad.")
             
             # Ranking
             st.subheader("📊 FIGURA 9: Ranking de Modelos (por Accuracy Promedio)")
@@ -1259,6 +1359,10 @@ with tab_stats:
                 height=400
             )
             st.plotly_chart(fig, use_container_width=True)
+            st.info("**Interpretación:** El diagrama muestra el ranking de cada modelo según accuracy promedio. "
+                   "Modelos con ranking 1 son los mejores (verde), ranking 2 segundos (naranja), resto en rojo.")
+            st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
+                      "y comparar el rendimiento relativo entre arquitecturas.")
             
             # Detailed analysis
             st.subheader("📈 Análisis Estadístico Detallado")
@@ -1377,13 +1481,38 @@ with tab_stats:
                     if stats_results:
                         df_stats = pd.DataFrame(stats_results)
                         st.dataframe(df_stats, use_container_width=True)
+                        
+                        # Add detailed interpretation for each test type
+                        st.divider()
+                        st.subheader("📖 Interpretación Detallada por Tipo de Prueba")
+                        
+                        # Friedman test interpretation
+                        friedman_results = [r for r in stats_results if "Friedman" in r["Prueba"]]
+                        if friedman_results:
+                            st.info("**Friedman Chi-square:** Prueba no paramétrica para comparar múltiples modelos relacionados. "
+                                   "Un p-valor < 0.05 indica que al menos un modelo difiere significativamente de los demás. "
+                                   "Es robusto cuando los datos no siguen distribución normal.")
+                        
+                        # Wilcoxon test interpretation
+                        wilcoxon_results = [r for r in stats_results if "Wilcoxon" in r["Prueba"]]
+                        if wilcoxon_results:
+                            st.info("**Wilcoxon signed-rank:** Prueba no paramétrica para comparar dos modelos pareados. "
+                                   "Evalúa si las diferencias entre los dos mejores modelos son significativas. "
+                                   "Ideal para comparaciones directas cuando el número de folds es pequeño.")
+                        
+                        # Shapiro-Wilk test interpretation
+                        shapiro_results = [r for r in stats_results if "Shapiro-Wilk" in r["Prueba"]]
+                        if shapiro_results:
+                            st.info("**Shapiro-Wilk:** Prueba de normalidad para verificar si los datos siguen distribución gaussiana. "
+                                   "Un p-valor > 0.05 indica normalidad (p-valor < 0.05 indica no normalidad). "
+                                   "Es importante porque pruebas paramétricas requieren normalidad; si no hay normalidad, "
+                                   "se deben usar pruebas no paramétricas como Friedman y Wilcoxon.")
+                        
+                        st.success("**Explicabilidad general:** Estas pruebas estadísticas proporcionan fundamentos matemáticos "
+                                  "rigurosos para justificar la selección del modelo, esencial para publicación científica y "
+                                  "para asegurar que las diferencias observadas no son producto del azar.")
                     else:
                         st.info("No se pudieron ejecutar las pruebas estadísticas.")
-                    
-                    st.info("**Interpretación:** Las pruebas estadísticas validan si las diferencias observadas entre modelos "
-                           "son estadísticamente significativas y no producto del azar.")
-                    st.success("**Explicabilidad:** La significancia estadística respalda la selección del mejor modelo con "
-                              "fundamentos matemáticos rigurosos, esencial para publicación científica.")
                     
                     # Generate figures with Plotly
                     st.subheader("📊 FIGURA 4: Comparación Visual de Modelos")
@@ -2061,8 +2190,7 @@ with tab_reports:
                     if output_format == "PDF":
                         filename = f"reporte_completo_{timestamp}.pdf"
                         try:
-                            output_path = generate_pdf_report(
-                                output_filename=filename,
+                            pdf_buffer = generate_training_report_to_memory(
                                 eda_quality_reports=eda_reports if "Resumen Ejecutivo" in report_sections or "Análisis EDA (Data Understanding)" in report_sections else None,
                                 architecture_cv_results=cv_results_dict if "Comparación de Modelos (Modeling)" in report_sections else None,
                                 architecture_comparison=architecture_comparison if "Pruebas Estadísticas (Evaluation)" in report_sections else None,
@@ -2075,25 +2203,22 @@ with tab_reports:
                                 stats_results=st.session_state.stats_results if include_tables else None
                             )
                             st.success(f"✅ Reporte PDF generado exitosamente")
-                            st.info(f"Archivo guardado en: {output_path}")
                             
                             # Preview PDF using iframe
                             st.subheader("📄 Previsualización del Reporte PDF")
-                            with open(output_path, "rb") as f:
-                                pdf_bytes = f.read()
-                                import base64
-                                base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-                                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
-                                st.markdown(pdf_display, unsafe_allow_html=True)
+                            pdf_bytes = pdf_buffer.getvalue()
+                            import base64
+                            base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+                            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+                            st.markdown(pdf_display, unsafe_allow_html=True)
                             
                             # Download button
-                            with open(output_path, "rb") as f:
-                                st.download_button(
-                                    label="📥 Descargar reporte PDF",
-                                    data=f.read(),
-                                    file_name=filename,
-                                    mime="application/pdf"
-                                )
+                            st.download_button(
+                                label="📥 Descargar reporte PDF",
+                                data=pdf_bytes,
+                                file_name=filename,
+                                mime="application/pdf"
+                            )
                         except Exception as e:
                             st.error(f"Error generando reporte PDF: {e}")
                     

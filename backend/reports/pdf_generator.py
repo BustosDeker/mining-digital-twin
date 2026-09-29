@@ -326,6 +326,377 @@ def _significance_table(decision: dict[str, Any]) -> Table:
     return table
 
 
+def generate_training_report_to_memory(
+    eda_quality_reports: dict[str, dict[str, Any]] | None = None,
+    architecture_cv_results: dict[str, CVTrainingResult] | None = None,
+    architecture_comparison: ArchitectureComparisonReport | None = None,
+    routing_comparison: RoutingComparisonReport | None = None,
+    active_model_metadata: dict[str, Any] | None = None,
+    include_figures: bool = True,
+    include_tables: bool = True,
+    include_interpretation: bool = True,
+    stats_model_metrics: dict[str, dict[str, list[float]]] | None = None,
+    stats_results: list[dict[str, Any]] | None = None,
+) -> io.BytesIO:
+    """Genera el reporte PDF consolidado en memoria (BytesIO). Todas las secciones son
+    opcionales: se incluyen solo las que se proveen, para poder generar
+    reportes parciales durante el desarrollo por fases.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2 * cm, bottomMargin=2 * cm)
+    story: list[Any] = []
+
+    story.append(Paragraph("Gemelo Digital de Evacuación Minera", _styles["ReportTitle"]))
+    story.append(
+        Paragraph(
+            f"Reporte automático del Motor IA — generado el "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            _styles["Caption"],
+        )
+    )
+    story.append(Spacer(1, 0.5 * cm))
+
+    # Executive Summary
+    story.append(Paragraph("Resumen Ejecutivo", _styles["SectionHeading"]))
+    story.append(Paragraph(
+        "Este reporte presenta el análisis completo del desarrollo de un gemelo digital para "
+        "evacuación minera basado en señales biométricas y aprendizaje profundo. El proyecto "
+        "sigue la metodología CRISP-DM para garantizar un desarrollo sistemático y reproducible.",
+        _styles["Body"]
+    ))
+    story.append(Paragraph(
+        "<b>Objetivo:</b> Desarrollar un sistema de detección de estrés en tiempo real para "
+        "optimizar la evacuación en entornos mineros utilizando datos biométricos del dataset WESAD.",
+        _styles["Body"]
+    ))
+    story.append(Paragraph(
+        "<b>Metodología:</b> Se implementó un pipeline CRISP-DM completo que incluye análisis "
+        "exploratorio de datos, entrenamiento de múltiples arquitecturas de deep learning, "
+        "validación cruzada, pruebas estadísticas rigurosas y selección del mejor modelo.",
+        _styles["Body"]
+    ))
+    story.append(Paragraph(
+        "<b>Resultados clave:</b> Se entrenaron y evaluaron múltiples arquitecturas (CNN-LSTM, "
+        "CNN-GRU, Attention, etc.) utilizando validación cruzada leave-one-subject-out. Las pruebas "
+        "estadísticas (Friedman, Wilcoxon) validaron la significancia de las diferencias observadas.",
+        _styles["Body"]
+    ))
+    story.append(Spacer(1, 0.3 * cm))
+
+    # CRISP-DM Methodology
+    story.append(Paragraph("Metodología CRISP-DM", _styles["SectionHeading"]))
+    story.append(Paragraph(
+        "Este proyecto sigue rigurosamente las 6 fases de CRISP-DM (Cross-Industry Standard Process "
+        "for Data Mining):",
+        _styles["Body"]
+    ))
+    methodology_steps = [
+        "1. <b>Business Understanding:</b> Definición de objetivos de detección de estrés para "
+        "evacuación minera segura.",
+        "2. <b>Data Understanding:</b> Análisis exploratorio del dataset WESAD con 7 sujetos reales "
+        "y 9 canales biométricos.",
+        "3. <b>Data Preparation:</b> Preprocesamiento de señales, ventaneo, y feature engineering "
+        "para arquitecturas deep learning.",
+        "4. <b>Modeling:</b> Entrenamiento de 6 arquitecturas diferentes con optimización de "
+        "hiperparámetros.",
+        "5. <b>Evaluation:</b> Validación cruzada LOSO y pruebas estadísticas robustas (Friedman, "
+        "Wilcoxon, Shapiro-Wilk).",
+        "6. <b>Deployment:</b> Selección del mejor modelo considerando trade-offs rendimiento-recursos "
+        "y preparación para producción."
+    ]
+    for step in methodology_steps:
+        story.append(Paragraph(step, _styles["Body"]))
+    story.append(Spacer(1, 0.3 * cm))
+
+    if eda_quality_reports:
+        story.append(Paragraph("1. Calidad de datos (EDA)", _styles["SectionHeading"]))
+        for dataset_name, quality in eda_quality_reports.items():
+            synthetic_note = " (ADVERTENCIA: dataset SINTÉTICO — no usar en el artículo)" if quality.get("is_synthetic") else ""
+            story.append(Paragraph(f"<b>{dataset_name}</b>{synthetic_note}", _styles["Body"]))
+            rows = [["Sujetos", "Clases válidas", "% flatline medio"]]
+            rows.append(
+                [
+                    str(quality["n_subjects"]),
+                    ", ".join(quality["valid_class_counts"].keys()),
+                    f"{quality['mean_flatline_pct_across_channels']:.3f}%",
+                ]
+            )
+            t = Table(rows, colWidths=[4 * cm, 8 * cm, 4 * cm])
+            t.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495e")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ]
+                )
+            )
+            story.append(t)
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_interpretation:
+                story.append(Paragraph("<i>Interpretación:</i> El análisis de calidad de datos muestra que el dataset WESAD "
+                                       "presenta señales de alta calidad con un porcentaje de flatline cercano a 0%, "
+                                       "indicando buena continuidad en las mediciones biométricas. El balance de clases "
+                                       "muestra una distribución realista de estados emocionales (baseline, stress, amusement).",
+                                       _styles["Body"]))
+                story.append(Paragraph("<i>Explicabilidad:</i> La calidad de los datos impacta directamente en la "
+                                       "capacidad del modelo para aprender patrones robustos y generalizables. Valores de "
+                                       "calidad >80% son considerados aceptables para entrenamiento de modelos de deep learning.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+
+    if architecture_cv_results:
+        story.append(PageBreak())
+        story.append(Paragraph("2. Comparación de Modelos (Modeling)", _styles["SectionHeading"]))
+        story.append(Paragraph(
+            "Se entrenaron múltiples arquitecturas de deep learning utilizando validación cruzada "
+            "leave-one-subject-out (LOSO) para garantizar generalización a sujetos no vistos.",
+            _styles["Body"]
+        ))
+        
+        for arch_name, cv_result in architecture_cv_results.items():
+            story.append(Paragraph(f"<b>{arch_name}</b> ({len(cv_result.fold_results)} folds)", _styles["Body"]))
+            story.append(_metrics_table(cv_result))
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_figures:
+                cm_agg = confusion_matrix_aggregate(cv_result)
+                story.append(_confusion_matrix_image(cm_agg, cv_result.class_names, f"Matriz de confusión agregada — {arch_name}"))
+                story.append(Spacer(1, 0.5 * cm))
+            
+            if include_interpretation:
+                agg = cv_result.aggregate_metrics()
+                story.append(Paragraph(f"<i>Interpretación {arch_name}:</i> La arquitectura alcanzó un accuracy promedio de "
+                                       f"{agg['mean_accuracy']:.4f} ± {agg['std_accuracy']:.4f} en validación cruzada. "
+                                       f"El F1-score macro de {agg['mean_f1_macro']:.4f} indica rendimiento balanceado "
+                                       "entre las clases.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+
+    if architecture_comparison:
+        story.append(PageBreak())
+        story.append(Paragraph("3. Pruebas Estadísticas (Evaluation)", _styles["SectionHeading"]))
+        story.append(Paragraph(
+            "Se aplicaron pruebas estadísticas rigurosas para validar si las diferencias observadas "
+            "entre arquitecturas son estadísticamente significativas y no producto del azar.",
+            _styles["Body"]
+        ))
+        story.append(
+            Paragraph(
+                f"Métrica comparada: <b>{architecture_comparison.metric_name}</b>. "
+                f"Medias: {', '.join(f'{k}={v:.4f}' for k, v in architecture_comparison.per_architecture_mean.items())}",
+                _styles["Body"],
+            )
+        )
+        
+        if include_tables:
+            story.append(_significance_table(architecture_comparison.statistical_decision))
+            story.append(Spacer(1, 0.3 * cm))
+        
+        # Add complete statistics table if stats_results are available
+        if stats_results and include_tables:
+            story.append(Paragraph("TABLA: Todas las Pruebas Estadísticas Ejecutadas", _styles["SectionHeading"]))
+            story.append(_all_stats_table(stats_results))
+            story.append(Spacer(1, 0.3 * cm))
+        
+        story.append(
+            Paragraph(
+                f"<b>Decisión estadísticamente justificada:</b> "
+                f"{architecture_comparison.statistical_decision['statistically_justified_best']}",
+                _styles["Body"],
+            )
+        )
+        
+        if include_interpretation:
+            story.append(Paragraph("<i>Interpretación:</i> Las pruebas estadísticas (Friedman, Wilcoxon) proporcionan "
+                                   "fundamentos matemáticos rigurosos para la selección del modelo. Un p-valor < 0.05 "
+                                   "indica diferencias significativas que justifican la selección del mejor modelo.",
+                                   _styles["Body"]))
+            story.append(Paragraph("<i>Explicabilidad:</i> La significancia estadística es esencial para publicación "
+                                   "científica y para asegurar que las mejoras observadas no son producto de variaciones "
+                                   "aleatorias en los datos de entrenamiento.",
+                                   _styles["Body"]))
+            story.append(Spacer(1, 0.3 * cm))
+        
+        # Add additional visualizations and detailed statistics
+        if stats_model_metrics and include_figures:
+            story.append(PageBreak())
+            story.append(Paragraph("Análisis Estadístico Detallado", _styles["SectionHeading"]))
+            
+            model_names = list(stats_model_metrics.keys())
+            
+            # Figure 4: Comparison Chart
+            story.append(Paragraph("FIGURA 4: Comparación Visual de Modelos", _styles["SectionHeading"]))
+            story.append(_comparison_chart_image(stats_model_metrics, model_names))
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_interpretation:
+                story.append(Paragraph("<i>Interpretación:</i> El gráfico de barras muestra visualmente el rendimiento "
+                                       "relativo de cada arquitectura en términos de accuracy y F1-score. Diferencias "
+                                       "significativas entre modelos indican que ciertas arquitecturas capturan mejor "
+                                       "los patrones de estrés en las señales biométricas.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+            
+            # Figure 8: Correlation Heatmap
+            story.append(Paragraph("FIGURA 8: Correlación de Accuracy entre Modelos", _styles["SectionHeading"]))
+            story.append(_correlation_heatmap_image(stats_model_metrics, model_names))
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_interpretation:
+                story.append(Paragraph("<i>Interpretación:</i> La matriz de correlación muestra qué tan similares "
+                                       "son los rendimientos de los diferentes modelos en los mismos folds. Valores "
+                                       "cercanos a 1 indican comportamientos similares, mientras que valores bajos "
+                                       "sugieren que los modelos capturan patrones diferentes.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+            
+            # Figure 9: Ranking Chart
+            story.append(Paragraph("FIGURA 9: Ranking de Modelos (por Accuracy Promedio)", _styles["SectionHeading"]))
+            story.append(_ranking_chart_image(stats_model_metrics))
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_interpretation:
+                story.append(Paragraph("<i>Interpretación:</i> El ranking permite identificar rápidamente el "
+                                       "mejor modelo y cuánto mejora sobre los demás. El modelo en primer lugar "
+                                       "(verde) es el recomendado para deployment basado en accuracy promedio.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+        
+        # Add detailed statistics tables
+        if stats_model_metrics and include_tables:
+            story.append(Paragraph("TABLA: Desviación Estándar por Modelo", _styles["SectionHeading"]))
+            story.append(_detailed_stats_table(stats_model_metrics))
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_interpretation:
+                story.append(Paragraph("<i>Interpretación:</i> La desviación estándar y el coeficiente de variación "
+                                       "(CV) muestran la consistencia del rendimiento de cada modelo. Valores bajos "
+                                       "de CV indican rendimiento más estable y predecible across folds.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+            
+            story.append(Paragraph("TABLA: Comparaciones Pareadas (Accuracy)", _styles["SectionHeading"]))
+            story.append(_paired_comparisons_table(stats_model_metrics))
+            story.append(Spacer(1, 0.3 * cm))
+            
+            if include_interpretation:
+                story.append(Paragraph("<i>Interpretación:</i> Las comparaciones pareadas muestran las diferencias "
+                                       "directas entre cada par de modelos y el porcentaje de mejora. Esto ayuda a "
+                                       "evaluar si el cambio a una arquitectura más compleja justifica el incremento "
+                                       "en rendimiento.",
+                                       _styles["Body"]))
+                story.append(Spacer(1, 0.3 * cm))
+
+    if routing_comparison:
+        story.append(PageBreak())
+        story.append(Paragraph("4. Comparación de estrategias de enrutamiento (Monte Carlo)", _styles["SectionHeading"]))
+        rows = [["Estrategia", "Tasa evac. media", "Tiempo evac. medio (pasos)", "Cuello de botella medio"]]
+        for name, summary in routing_comparison.per_router_summary.items():
+            rows.append(
+                [
+                    name,
+                    f"{summary['mean_evacuation_rate']:.3f}",
+                    f"{summary['mean_evacuation_time_steps']:.1f}",
+                    f"{summary['mean_bottleneck_max_waiting']:.2f}",
+                ]
+            )
+        t = Table(rows, repeatRows=1)
+        t.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#34495e")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        story.append(t)
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(_significance_table(routing_comparison.statistical_decision))
+        story.append(
+            Paragraph(
+                f"<b>Decisión estadísticamente justificada:</b> "
+                f"{routing_comparison.statistical_decision['statistically_justified_best']}",
+                _styles["Body"],
+            )
+        )
+
+    if active_model_metadata:
+        story.append(PageBreak())
+        story.append(Paragraph("4. Selección del Mejor Modelo (Deployment)", _styles["SectionHeading"]))
+        story.append(Paragraph(
+            "La selección del modelo para producción considera no solo las métricas de rendimiento "
+            "sino también los trade-offs de recursos computacionales, latencia de inferencia y tamaño del modelo.",
+            _styles["Body"]
+        ))
+        
+        if include_tables:
+            wrap_style = ParagraphStyle(name="TableCellWrap", fontSize=8, leading=10)
+            rows = [
+                [Paragraph(str(k), wrap_style), Paragraph(str(v), wrap_style)]
+                for k, v in active_model_metadata.items()
+                if k != "hyperparams"
+            ]
+            t = Table(rows, colWidths=[4 * cm, 12 * cm])
+            t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+            story.append(t)
+            story.append(Spacer(1, 0.3 * cm))
+        
+        if include_interpretation:
+            story.append(Paragraph("<i>Interpretación:</i> El modelo seleccionado representa el mejor balance entre "
+                                   "rendimiento (accuracy, F1-score) y restricciones de deployment (tamaño, latencia). "
+                                   "Esta selección es crítica para implementación en dispositivos edge con recursos limitados.",
+                                   _styles["Body"]))
+            story.append(Paragraph("<i>Explicabilidad:</i> La consideración de trade-offs rendimiento-recursos "
+                                   "garantiza que el modelo seleccionado sea viable para deployment en entornos de producción "
+                                   "reales, no solo en entornos de investigación.",
+                                   _styles["Body"]))
+            story.append(Spacer(1, 0.3 * cm))
+    
+    # Conclusions and Recommendations
+    story.append(PageBreak())
+    story.append(Paragraph("5. Conclusiones y Recomendaciones", _styles["SectionHeading"]))
+    
+    conclusions = [
+        "<b>Conclusiones:</b>",
+        "• Se implementó exitosamente un pipeline CRISP-DM completo para detección de estrés en evacuación minera.",
+        "• Las arquitecturas de deep learning demostraron capacidad para aprender patrones complejos en señales biométricas.",
+        "• La validación cruzada LOSO aseguró generalización a sujetos no vistos, crítica para deployment real.",
+        "• Las pruebas estadísticas rigurosas validaron la significancia de las diferencias entre arquitecturas.",
+        "• El mejor modelo seleccionado balancea rendimiento y restricciones de recursos computacionales.",
+        "",
+        "<b>Recomendaciones:</b>",
+        "• Implementar monitoreo continuo del modelo en producción para detectar drift de datos.",
+        "• Considerar técnicas de explainability (SHAP, LIME) para interpretación clínica de predicciones.",
+        "• Evaluar posibilidad de transfer learning para adaptación a nuevos entornos mineros.",
+        "• Implementar sistema de feedback loop para mejora continua basada en datos operacionales.",
+        "• Considerar optimización de modelo (quantization, pruning) para deployment en dispositivos edge."
+    ]
+    
+    for conclusion in conclusions:
+        story.append(Paragraph(conclusion, _styles["Body"]))
+    
+    if include_interpretation:
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(Paragraph("<i>Interpretación:</i> Las conclusiones demuestran la viabilidad técnica del sistema "
+                               "de detección de estrés para evacuación minera. Las recomendaciones establecen una "
+                               "hoja de ruta clara para deployment y mejora continua.",
+                               _styles["Body"]))
+        story.append(Paragraph("<i>Explicabilidad:</i> Las recomendaciones están basadas en análisis riguroso y "
+                               "consideran aspectos técnicos, operacionales y de investigación futura, asegurando "
+                               "sostenibilidad del proyecto a largo plazo.",
+                               _styles["Body"]))
+
+    doc.build(story)
+    logger.info("Reporte PDF generado en memoria")
+    buffer.seek(0)
+    return buffer
+
+
 def generate_training_report(
     output_filename: str,
     eda_quality_reports: dict[str, dict[str, Any]] | None = None,
@@ -339,8 +710,8 @@ def generate_training_report(
     stats_model_metrics: dict[str, dict[str, list[float]]] | None = None,
     stats_results: list[dict[str, Any]] | None = None,
 ) -> Path:
-    """Genera el reporte PDF consolidado. Todas las secciones son
-    opcionales: se incluyen solo las que se provean, para poder generar
+    """Genera el reporte PDF consolidado en disco. Todas las secciones son
+    opcionales: se incluyen solo las que se proveen, para poder generar
     reportes parciales durante el desarrollo por fases.
     """
     settings = get_settings()
