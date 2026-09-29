@@ -882,7 +882,10 @@ with tab_cv:
                                 "Accuracy": f"{fold_result.metrics['accuracy']:.4f}",
                                 "F1-Score": f"{fold_result.metrics['f1_macro']:.4f}",
                                 "Precision": f"{fold_result.metrics['precision_macro']:.4f}",
-                                "Recall": f"{fold_result.metrics['recall_macro']:.4f}"
+                                "Recall": f"{fold_result.metrics['recall_macro']:.4f}",
+                                "y_true": fold_result.y_true.tolist(),
+                                "y_pred": fold_result.y_pred.tolist(),
+                                "class_names": fold_result.class_names
                             })
                         
                         st.success(f"✅ Validación cruzada completada para {selected_cv_model}")
@@ -1025,6 +1028,32 @@ with tab_cv:
                                     with col3:
                                         st.metric("Precision Promedio", f"{np.mean(prec_values):.4f}")
                                         st.metric("Recall Promedio", f"{np.mean(rec_values):.4f}")
+                                    
+                                    # Add confusion matrix visualization
+                                    st.divider()
+                                    st.subheader(f"Matriz de Confusión Agregada - {model}")
+                                    
+                                    # Aggregate confusion matrix across all folds
+                                    from sklearn.metrics import confusion_matrix
+                                    class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
+                                    n_classes = len(class_names)
+                                    cm_agg = np.zeros((n_classes, n_classes), dtype=int)
+                                    
+                                    for r in model_results:
+                                        y_true = np.array(r["y_true"])
+                                        y_pred = np.array(r["y_pred"])
+                                        cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+                                    
+                                    # Plot confusion matrix
+                                    fig, ax = plt.subplots(figsize=(5, 4))
+                                    sns.heatmap(cm_agg, annot=True, fmt="d", cmap="Blues", 
+                                               xticklabels=class_names, yticklabels=class_names, ax=ax)
+                                    ax.set_xlabel("Predicho")
+                                    ax.set_ylabel("Real")
+                                    ax.set_title(f"Matriz de Confusión Agregada - {model}")
+                                    plt.tight_layout()
+                                    st.pyplot(fig)
+                                    plt.close(fig)
                         
                         st.info("**Interpretación:** Esta tabla muestra los resultados de validación cruzada para cada arquitectura. "
                                "La consistencia entre folds indica robustez del modelo.")
@@ -2047,6 +2076,17 @@ with tab_reports:
                             )
                             st.success(f"✅ Reporte PDF generado exitosamente")
                             st.info(f"Archivo guardado en: {output_path}")
+                            
+                            # Preview PDF using iframe
+                            st.subheader("📄 Previsualización del Reporte PDF")
+                            with open(output_path, "rb") as f:
+                                pdf_bytes = f.read()
+                                import base64
+                                base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+                                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+                                st.markdown(pdf_display, unsafe_allow_html=True)
+                            
+                            # Download button
                             with open(output_path, "rb") as f:
                                 st.download_button(
                                     label="📥 Descargar reporte PDF",
@@ -2069,7 +2109,9 @@ with tab_reports:
                                 active_model_metadata=active_model_metadata if "Selección del Mejor Modelo (Deployment)" in report_sections else None,
                                 include_figures=include_figures,
                                 include_tables=include_tables,
-                                include_interpretation=include_interpretation
+                                include_interpretation=include_interpretation,
+                                stats_model_metrics=st.session_state.stats_model_metrics if include_figures or include_tables else None,
+                                stats_results=st.session_state.stats_results if include_tables else None
                             )
                             st.success(f"✅ Reporte Word generado exitosamente")
                             st.info(f"Archivo guardado en: {output_path}")

@@ -86,8 +86,8 @@ def _add_comparison_chart(doc: Document, model_metrics: dict[str, dict[str, list
     x = np.arange(len(model_names))
     width = 0.35
     
-    bars1 = ax.bar(x - width/2, accuracy_means, width, label='Accuracy', color='rgba(55, 128, 191, 0.8)', alpha=0.8)
-    bars2 = ax.bar(x + width/2, f1_means, width, label='F1-Score', color='rgba(219, 64, 82, 0.8)', alpha=0.8)
+    bars1 = ax.bar(x - width/2, accuracy_means, width, label='Accuracy', color=(55/255, 128/255, 191/255, 0.8))
+    bars2 = ax.bar(x + width/2, f1_means, width, label='F1-Score', color=(219/255, 64/255, 82/255, 0.8))
     
     ax.set_xlabel('Arquitectura')
     ax.set_ylabel('Score')

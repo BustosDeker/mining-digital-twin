@@ -98,8 +98,8 @@ def _comparison_chart_image(model_metrics: dict[str, dict[str, list[float]]], mo
     x = np.arange(len(model_names))
     width = 0.35
     
-    bars1 = ax.bar(x - width/2, accuracy_means, width, label='Accuracy', color='rgba(55, 128, 191, 0.8)', alpha=0.8)
-    bars2 = ax.bar(x + width/2, f1_means, width, label='F1-Score', color='rgba(219, 64, 82, 0.8)', alpha=0.8)
+    bars1 = ax.bar(x - width/2, accuracy_means, width, label='Accuracy', color=(55/255, 128/255, 191/255, 0.8))
+    bars2 = ax.bar(x + width/2, f1_means, width, label='F1-Score', color=(219/255, 64/255, 82/255, 0.8))
     
     ax.set_xlabel('Arquitectura')
     ax.set_ylabel('Score')
@@ -165,10 +165,10 @@ def _ranking_chart_image(model_metrics: dict[str, dict[str, list[float]]]) -> Im
     
     model_names_plot = [m for m, _ in sorted_models]
     ranking_values = [rankings[m] for m in model_names_plot]
-    colors = ['green' if r == 1 else 'orange' if r == 2 else 'red' for r in ranking_values]
+    bar_colors = ['green' if r == 1 else 'orange' if r == 2 else 'red' for r in ranking_values]
     
     fig, ax = plt.subplots(figsize=(8, 5))
-    bars = ax.barh(model_names_plot, ranking_values, color=colors)
+    bars = ax.barh(model_names_plot, ranking_values, color=bar_colors)
     
     ax.set_xlabel('Ranking')
     ax.set_title('Ranking de Modelos (por Accuracy Promedio)')
@@ -246,6 +246,31 @@ def _paired_comparisons_table(model_metrics: dict[str, dict[str, list[float]]]) 
                 f"{improvement:.2f}%",
                 better
             ])
+    
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ]
+        )
+    )
+    return table
+
+
+def _all_stats_table(stats_results: list[dict[str, Any]]) -> Table:
+    """Generate table with all statistical tests (Friedman, Wilcoxon, Shapiro-Wilk)."""
+    rows = [["Prueba", "Valor", "p-value", "Interpretación"]]
+    for result in stats_results:
+        rows.append([
+            result.get("Prueba", "—"),
+            result.get("Valor", "—"),
+            result.get("p-value", "—"),
+            result.get("Interpretación", "—")
+        ])
     
     table = Table(rows, repeatRows=1)
     table.setStyle(
@@ -472,6 +497,12 @@ def generate_training_report(
         
         if include_tables:
             story.append(_significance_table(architecture_comparison.statistical_decision))
+            story.append(Spacer(1, 0.3 * cm))
+        
+        # Add complete statistics table if stats_results are available
+        if stats_results and include_tables:
+            story.append(Paragraph("TABLA: Todas las Pruebas Estadísticas Ejecutadas", _styles["SectionHeading"]))
+            story.append(_all_stats_table(stats_results))
             story.append(Spacer(1, 0.3 * cm))
         
         story.append(
