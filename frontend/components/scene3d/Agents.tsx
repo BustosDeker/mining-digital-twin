@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useLayoutEffect, useEffect, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { AgentSnapshot, AgentStatus, MineNode } from "@/lib/types";
-import { backendToThreePosition, lerpPosition } from "./geometry";
+import { backendToThreePosition } from "./geometry";
 import { SCENE_COLORS as C } from "./colors";
+import { AgentMotion } from "./agentMotion";
+import { createWorkerRig, WORKER_PARTS } from "./MineWorker";
 
 interface AgentsProps {
   nodes: MineNode[]; agents: Record<string, AgentSnapshot>; followedAgentId: string | null;
@@ -12,73 +15,80 @@ interface AgentsProps {
 }
 const STATUS: Record<AgentStatus, string> = { moving: C.agentMoving, waiting: C.agentWaiting,
   sheltered: C.agentSheltered, evacuated: C.agentEvacuated, lost: C.agentLost };
-interface Worker { agent: AgentSnapshot; position: [number, number, number]; heading: number; followed: boolean }
-interface Part {
-  shape: "box" | "head" | "helmet" | "ring";
-  position: [number, number, number]; scale: [number, number, number]; color: string;
-  basic?: boolean; indicator?: "status" | "panic" | "follow";
-}
-const PARTS: Part[] = [
-  { shape: "box", position: [0, 0.145, 0], scale: [0.09, 0.12, 0.055], color: "#d7a44e" },
-  { shape: "box", position: [-0.025, 0.044, 0], scale: [0.031, 0.088, 0.041], color: "#283c4b" },
-  { shape: "box", position: [0.025, 0.044, 0], scale: [0.031, 0.088, 0.041], color: "#283c4b" },
-  { shape: "head", position: [0, 0.228, 0], scale: [0.033, 0.035, 0.032], color: "#caa98c" },
-  { shape: "helmet", position: [0, 0.245, 0], scale: [0.045, 0.042, 0.043], color: "#f2c35f" },
-  { shape: "box", position: [0, 0.247, 0.043], scale: [0.021, 0.015, 0.015], color: "#fff5d8", basic: true },
-  { shape: "box", position: [0, 0.15, 0.031], scale: [0.095, 0.019, 0.008], color: "#eceee0", basic: true },
-  { shape: "box", position: [-0.062, 0.14, 0], scale: [0.027, 0.115, 0.032], color: "#d7a44e" },
-  { shape: "box", position: [0.062, 0.14, 0], scale: [0.027, 0.115, 0.032], color: "#d7a44e" },
-  { shape: "box", position: [0, 0.145, -0.043], scale: [0.062, 0.078, 0.035], color: "#465563" },
-  { shape: "box", position: [0, 0.196, 0.032], scale: [0.095, 0.016, 0.008], color: "#eceee0", basic: true },
-  { shape: "box", position: [0, 0.298, 0], scale: [0.056, 0.018, 0.025], color: "#ffffff", basic: true, indicator: "status" },
-  { shape: "ring", position: [0, 0.011, 0], scale: [0.16, 0.16, 0.16], color: C.agentPanicHalo, basic: true, indicator: "panic" },
-  { shape: "ring", position: [0, 0.017, 0], scale: [0.21, 0.21, 0.21], color: "#c1e7f5", basic: true, indicator: "follow" },
-];
-
-function InstancedPart({ part, workers, geometry, onSelect }: { part: Part; workers: Worker[]; geometry: THREE.BufferGeometry; onSelect: (id: string) => void }) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    const root = new THREE.Object3D(), local = new THREE.Object3D(), matrix = new THREE.Matrix4();
-    const color = new THREE.Color();
-    workers.forEach((worker, i) => {
-      root.position.set(...worker.position); root.rotation.set(0, worker.heading, 0); root.updateMatrix();
-      local.position.set(...part.position); local.scale.set(...part.scale);
-      local.rotation.set(part.shape === "ring" ? -Math.PI / 2 : 0, 0, 0);
-      if (part.indicator === "panic" && worker.agent.panic_level < 0.6 || part.indicator === "follow" && !worker.followed) local.scale.setScalar(0);
-      local.updateMatrix();
-      mesh.setMatrixAt(i, matrix.multiplyMatrices(root.matrix, local.matrix));
-      mesh.setColorAt(i, color.set(part.indicator === "status" ? STATUS[worker.agent.status] : part.color));
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    mesh.computeBoundingSphere();
-  }, [workers, part, geometry]);
-  return <instancedMesh key={workers.length} ref={ref} args={[geometry, undefined, workers.length]} onClick={e => {
-    if (e.instanceId === undefined) return;
-    e.stopPropagation(); onSelect(String(workers[e.instanceId].agent.agent_id));
-  }}>
-    {part.basic ? <meshBasicMaterial side={THREE.DoubleSide} /> : <meshStandardMaterial roughness={0.7} />}
-  </instancedMesh>;
-}
 
 export function Agents({ nodes, agents, followedAgentId, onSelectAgent, performanceMode }: AgentsProps) {
-  const positions = useMemo(() => new Map(nodes.map(n => [n.node_id, backendToThreePosition(n.position)])), [nodes]);
+  const positions = useMemo(() => new Map(nodes.map(n => [n.node_id, new THREE.Vector3(...backendToThreePosition(n.position))])), [nodes]);
+  const motions = useRef(new Map<number, AgentMotion>());
+  const oldPositions = useRef(positions);
+  const meshes = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const rig = useMemo(createWorkerRig, []);
+  const color = useMemo(() => new THREE.Color(), []);
+  const workers = useMemo(() => Object.values(agents).filter(a => a.status !== "evacuated" && positions.has(a.node_id)), [agents, positions]);
+  const parts = useMemo(() => WORKER_PARTS.filter(p => !performanceMode || !p.detail), [performanceMode]);
   const geometry = useMemo(() => ({ box: new THREE.BoxGeometry(1, 1, 1),
-    head: new THREE.SphereGeometry(1, 8, 6), helmet: new THREE.SphereGeometry(1, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2),
+    round: new THREE.SphereGeometry(1, performanceMode ? 6 : 10, performanceMode ? 4 : 8),
+    helmet: new THREE.SphereGeometry(1, performanceMode ? 6 : 10, 4, 0, Math.PI * 2, 0, Math.PI / 2),
     ring: new THREE.RingGeometry(0.86, 1, performanceMode ? 12 : 24) }), [performanceMode]);
+  const materials = useMemo(() => ({ standard: new THREE.MeshStandardMaterial({ roughness: 0.78 }),
+    basic: new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }) }), []);
   useEffect(() => () => Object.values(geometry).forEach(g => g.dispose()), [geometry]);
-  const workers = useMemo(() => Object.values(agents).flatMap(agent => {
-    if (agent.status === "evacuated") return [];
-    const from = positions.get(agent.node_id), to = positions.get(agent.next_node_id) ?? from;
-    if (!from || !to) return [];
-    const position = lerpPosition(from, to, agent.progress);
-    return [{ agent, position, heading: Math.atan2(to[0] - from[0], to[2] - from[2]), followed: followedAgentId === String(agent.agent_id) }];
-  }), [agents, positions, followedAgentId]);
-  // A bounded number of draws for 20 or 100 workers. Performance mode keeps PPE,
-  // status, panic and selection while omitting arms, backpack and extra trim.
-  const parts = performanceMode ? PARTS.filter((_, i) => ![3, 7, 8, 9, 10].includes(i)) : PARTS;
+  useEffect(() => () => Object.values(materials).forEach(m => m.dispose()), [materials]);
+  useLayoutEffect(() => {
+    const now = performance.now(), states = motions.current;
+    // MineGraphScene is already keyed by session_id; remounts isolate sessions.
+    // Stable nodes identity changes on layout changes. A distance rollback is
+    // authoritative evidence of reset, including workers already at rest.
+    const reset = oldPositions.current !== positions || workers.some(a => {
+      const old = states.get(a.agent_id);
+      return old && a.cumulative_distance_m + 0.05 < old.agent.cumulative_distance_m;
+    });
+    if (reset) states.clear();
+    oldPositions.current = positions;
+    const active = new Set(workers.map(a => a.agent_id));
+    states.forEach((_, id) => { if (!active.has(id)) states.delete(id); });
+    workers.forEach(a => {
+      const motion = states.get(a.agent_id);
+      if (!motion || !motion.receive(a, positions, now)) states.set(a.agent_id, new AgentMotion(a, positions, now));
+    });
+    parts.forEach((part, p) => {
+      const mesh = meshes.current[p];
+      if (!mesh) return;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      workers.forEach((a, i) => mesh.setColorAt(i, color.set(part.indicator === "status" ? STATUS[a.status] : part.color)));
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
+  }, [workers, positions, parts, color]);
+
+  // Single frame callback; no per-worker React updates or per-frame math objects.
+  useFrame((_, delta) => {
+    workers.forEach((a, i) => {
+      const motion = motions.current.get(a.agent_id);
+      if (!motion) return;
+      motion.advance(delta); rig.pose(motion, performanceMode);
+      parts.forEach((part, p) => {
+        const hidden = part.indicator === "panic" && a.panic_level < 0.6
+          || part.indicator === "follow" && followedAgentId !== String(a.agent_id);
+        meshes.current[p]?.setMatrixAt(i, rig.matrix(part, hidden));
+      });
+    });
+    parts.forEach((_, p) => {
+      const mesh = meshes.current[p];
+      if (!mesh) return;
+      mesh.instanceMatrix.needsUpdate = true;
+      // Raycasting needs current bounds even with frustum culling disabled.
+      mesh.computeBoundingSphere();
+    });
+  }, -1);
+
   if (!workers.length) return null;
-  return <group>{parts.map((part, i) => <InstancedPart key={i} part={part} workers={workers} geometry={geometry[part.shape]} onSelect={onSelectAgent} />)}</group>;
+  // R3F owns each InstancedMesh and releases its instance buffers on removal.
+  // Geometry/material are constructor arguments, not declarative children:
+  // their shared lifetime is managed by the effects above. Do not set
+  // dispose={null}: it replaces the mesh's actual dispose method with null.
+  return <group>{parts.map((part, p) => <instancedMesh key={`${WORKER_PARTS.indexOf(part)}:${workers.length}`}
+    ref={mesh => { meshes.current[p] = mesh; }} args={[geometry[part.shape], part.basic ? materials.basic : materials.standard, workers.length]}
+    frustumCulled={false} onClick={e => {
+      if (e.instanceId === undefined || !workers[e.instanceId]) return;
+      e.stopPropagation(); onSelectAgent(String(workers[e.instanceId].agent_id));
+    }} />)}</group>;
 }
