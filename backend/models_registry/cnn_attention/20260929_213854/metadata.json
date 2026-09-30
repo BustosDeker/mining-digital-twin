@@ -1,0 +1,14 @@
+{
+  "architecture_name": "cnn_attention",
+  "version_id": "20260929_213854",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-29T21:38:55.762861",
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "model_size_mb": 0.48,
+  "inference_latency_ms": 771.11
+}

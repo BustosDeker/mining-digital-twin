@@ -1,20 +1,20 @@
 {
-  "architecture_name": "attention",
-  "version_id": "20260929_210608",
-  "activated_at": "2026-09-29T21:06:10.329644",
+  "architecture_name": "cnn_attention",
+  "version_id": "20260929_213854",
+  "activated_at": "2026-09-29T21:38:55.772941",
   "selection_criteria": "Auto-activated after training",
   "metadata": {
-    "architecture_name": "attention",
-    "version_id": "20260929_210608",
+    "architecture_name": "cnn_attention",
+    "version_id": "20260929_213854",
     "epochs": 50,
     "batch_size": 32,
-    "trained_at": "2026-09-29T21:06:10.316297",
+    "trained_at": "2026-09-29T21:38:55.762861",
     "class_names": [
       "amusement",
       "baseline",
       "stress"
     ],
-    "model_size_mb": 0.28,
-    "inference_latency_ms": 758.7
+    "model_size_mb": 0.48,
+    "inference_latency_ms": 771.11
   }
 }
