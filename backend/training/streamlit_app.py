@@ -738,9 +738,18 @@ with tab_cv:
         for arch_dir in models_registry_path.iterdir():
             if arch_dir.is_dir() and not arch_dir.name.startswith('.'):
                 available_models.append(arch_dir.name)
-                st.info(f"Arquitectura: {arch_dir.name}")
-                version_count = len(list(arch_dir.iterdir()))
-                st.write(f"Versiones entrenadas: {version_count}")
+        
+        # Display models in 2-column layout
+        for i in range(0, len(available_models), 2):
+            cols = st.columns(2)
+            for j in range(2):
+                if i + j < len(available_models):
+                    model = available_models[i + j]
+                    arch_dir = models_registry_path / model
+                    with cols[j]:
+                        st.info(f"📦 **{model}**")
+                        version_count = len(list(arch_dir.iterdir()))
+                        st.caption(f"Versiones entrenadas: {version_count}")
     else:
         st.warning("No se encontraron modelos entrenados. Ejecute el entrenamiento primero.")
     
@@ -774,62 +783,91 @@ with tab_cv:
             # Display aggregate metrics per model
             st.subheader("Métricas Agregadas por Modelo (Previos)")
             unique_models = df_cv_results["Arquitectura"].unique()
-            for model in unique_models:
-                model_results = [r for r in st.session_state.cv_results if r["Arquitectura"] == model]
-                if model_results:
-                    with st.expander(f"📊 {model}"):
-                        col1, col2, col3 = st.columns(3)
-                        acc_values = [float(r["Accuracy"]) for r in model_results]
-                        f1_values = [float(r["F1-Score"]) for r in model_results]
-                        prec_values = [float(r["Precision"]) for r in model_results]
-                        rec_values = [float(r["Recall"]) for r in model_results]
-                        
-                        with col1:
-                            st.metric("Accuracy Promedio", f"{np.mean(acc_values):.4f}")
-                            st.metric("Accuracy Std", f"{np.std(acc_values):.4f}")
-                        with col2:
-                            st.metric("F1-Score Promedio", f"{np.mean(f1_values):.4f}")
-                            st.metric("F1-Score Std", f"{np.std(f1_values):.4f}")
-                        with col3:
-                            st.metric("Precision Promedio", f"{np.mean(prec_values):.4f}")
-                            st.metric("Recall Promedio", f"{np.mean(rec_values):.4f}")
-                        
-                        # Add confusion matrix visualization for previous results
-                        st.divider()
-                        st.subheader(f"Matriz de Confusión Agregada - {model}")
-                        
-                        # Check if we have the necessary data for confusion matrix
-                        if "y_true" in model_results[0] and "y_pred" in model_results[0]:
-                            # Aggregate confusion matrix across all folds
-                            from sklearn.metrics import confusion_matrix
-                            class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
-                            n_classes = len(class_names)
-                            cm_agg = np.zeros((n_classes, n_classes), dtype=int)
-                            
-                            for r in model_results:
-                                y_true = np.array(r["y_true"])
-                                y_pred = np.array(r["y_pred"])
-                                cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
-                            
-                            # Plot confusion matrix
-                            fig, ax = plt.subplots(figsize=(5, 4))
-                            sns.heatmap(cm_agg, annot=True, fmt="d", cmap="Blues", 
-                                       xticklabels=class_names, yticklabels=class_names, ax=ax)
-                            ax.set_xlabel("Predicho")
-                            ax.set_ylabel("Real")
-                            ax.set_title(f"Matriz de Confusión Agregada - {model}")
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close(fig)
-                            
-                            st.info("**Interpretación:** La matriz de confusión muestra las predicciones correctas e incorrectas "
-                                   "para cada clase. Valores en la diagonal indican predicciones correctas.")
-                            st.success("**Explicabilidad:** La matriz de confusión permite identificar qué clases son "
-                                      "más difíciles de clasificar y si hay sesgos hacia clases específicas.")
-                        else:
-                            st.warning("⚠️ Los resultados de validación cruzada previos no contienen los datos necesarios "
-                                      "(y_true, y_pred) para generar la matriz de confusión. "
-                                      "Ejecute nuevamente la validación cruzada para ver las matrices de confusión.")
+            
+            # Display models in 2-column layout
+            for i in range(0, len(unique_models), 2):
+                cols = st.columns(2)
+                for j in range(2):
+                    if i + j < len(unique_models):
+                        model = unique_models[i + j]
+                        model_results = [r for r in st.session_state.cv_results if r["Arquitectura"] == model]
+                        if model_results:
+                            with cols[j]:
+                                st.markdown(f"### 📊 {model}")
+                                
+                                # Metrics
+                                col1, col2, col3 = st.columns(3)
+                                acc_values = [float(r["Accuracy"]) for r in model_results]
+                                f1_values = [float(r["F1-Score"]) for r in model_results]
+                                prec_values = [float(r["Precision"]) for r in model_results]
+                                rec_values = [float(r["Recall"]) for r in model_results]
+                                
+                                with col1:
+                                    st.metric("Acc", f"{np.mean(acc_values):.3f}")
+                                    st.metric("Std", f"{np.std(acc_values):.3f}")
+                                with col2:
+                                    st.metric("F1", f"{np.mean(f1_values):.3f}")
+                                    st.metric("Std", f"{np.std(f1_values):.3f}")
+                                with col3:
+                                    st.metric("Prec", f"{np.mean(prec_values):.3f}")
+                                    st.metric("Rec", f"{np.mean(rec_values):.3f}")
+                                
+                                # Confusion matrix
+                                if "y_true" in model_results[0] and "y_pred" in model_results[0]:
+                                    from sklearn.metrics import confusion_matrix
+                                    class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
+                                    n_classes = len(class_names)
+                                    cm_agg = np.zeros((n_classes, n_classes), dtype=int)
+                                    
+                                    for r in model_results:
+                                        y_true = np.array(r["y_true"])
+                                        y_pred = np.array(r["y_pred"])
+                                        cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+                                    
+                                    # Calculate percentages
+                                    cm_percent = cm_agg.astype('float') / cm_agg.sum(axis=1)[:, np.newaxis] * 100
+                                    
+                                    # Create text with both count and percentage
+                                    text_values = []
+                                    for k in range(n_classes):
+                                        row = []
+                                        for l in range(n_classes):
+                                            count = cm_agg[k, l]
+                                            pct = cm_percent[k, l]
+                                            row.append(f"{count}<br>({pct:.1f}%)")
+                                        text_values.append(row)
+                                    
+                                    fig_cm = go.Figure(data=go.Heatmap(
+                                        z=cm_agg,
+                                        x=class_names,
+                                        y=class_names,
+                                        colorscale='RdYlGn',
+                                        text=text_values,
+                                        texttemplate="%{text}",
+                                        textfont={"size": 11, "color": "black"},
+                                        colorbar=dict(title="Cantidad", x=1.2),
+                                        showscale=True
+                                    ))
+                                    fig_cm.update_layout(
+                                        title=dict(
+                                            text=f"<b>Matriz de Confusión</b>",
+                                            font=dict(size=12, color="#1f2937")
+                                        ),
+                                        xaxis=dict(
+                                            title=dict(text="<b>Predicho</b>", font=dict(size=10)),
+                                            tickfont=dict(size=9)
+                                        ),
+                                        yaxis=dict(
+                                            title=dict(text="<b>Real</b>", font=dict(size=10)),
+                                            tickfont=dict(size=9)
+                                        ),
+                                        height=250,
+                                        width=450,
+                                        margin=dict(l=60, r=130, t=40, b=40),
+                                        paper_bgcolor="white",
+                                        plot_bgcolor="white"
+                                    )
+                                    st.plotly_chart(fig_cm, use_container_width=True)
             
             st.divider()
         
@@ -1044,59 +1082,91 @@ with tab_cv:
                         
                         # Display aggregate metrics per model
                         st.subheader("Métricas Agregadas por Modelo")
-                        for model in selected_cv_models:
-                            model_results = [r for r in all_cv_results if r["Arquitectura"] == model]
-                            if model_results:
-                                with st.expander(f"📊 {model}"):
-                                    col1, col2, col3 = st.columns(3)
-                                    acc_values = [float(r["Accuracy"]) for r in model_results]
-                                    f1_values = [float(r["F1-Score"]) for r in model_results]
-                                    prec_values = [float(r["Precision"]) for r in model_results]
-                                    rec_values = [float(r["Recall"]) for r in model_results]
-                                    
-                                    with col1:
-                                        st.metric("Accuracy Promedio", f"{np.mean(acc_values):.4f}")
-                                        st.metric("Accuracy Std", f"{np.std(acc_values):.4f}")
-                                    with col2:
-                                        st.metric("F1-Score Promedio", f"{np.mean(f1_values):.4f}")
-                                        st.metric("F1-Score Std", f"{np.std(f1_values):.4f}")
-                                    with col3:
-                                        st.metric("Precision Promedio", f"{np.mean(prec_values):.4f}")
-                                        st.metric("Recall Promedio", f"{np.mean(rec_values):.4f}")
-                                    
-                                    # Add confusion matrix visualization
-                                    st.divider()
-                                    st.subheader(f"Matriz de Confusión Agregada - {model}")
-                                    
-                                    # Check if we have the necessary data for confusion matrix
-                                    if "y_true" in model_results[0] and "y_pred" in model_results[0]:
-                                        # Aggregate confusion matrix across all folds
-                                        from sklearn.metrics import confusion_matrix
-                                        class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
-                                        n_classes = len(class_names)
-                                        cm_agg = np.zeros((n_classes, n_classes), dtype=int)
-                                        
-                                        for r in model_results:
-                                            y_true = np.array(r["y_true"])
-                                            y_pred = np.array(r["y_pred"])
-                                            cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
-                                        
-                                        # Plot confusion matrix
-                                        fig, ax = plt.subplots(figsize=(5, 4))
-                                        sns.heatmap(cm_agg, annot=True, fmt="d", cmap="Blues", 
-                                                   xticklabels=class_names, yticklabels=class_names, ax=ax)
-                                        ax.set_xlabel("Predicho")
-                                        ax.set_ylabel("Real")
-                                        ax.set_title(f"Matriz de Confusión Agregada - {model}")
-                                        plt.tight_layout()
-                                        st.pyplot(fig)
-                                        plt.close(fig)
-                                        
-                                        st.info("**Interpretación:** La matriz de confusión muestra las predicciones correctas e incorrectas "
-                                               "para cada clase. Valores en la diagonal indican predicciones correctas.")
-                                        st.success("**Explicabilidad:** La matriz de confusión permite identificar qué clases son "
-                                                  "más difíciles de clasificar y si hay sesgos hacia clases específicas.")
-                                    else:
+                        
+                        # Display models in 2-column layout
+                        for i in range(0, len(selected_cv_models), 2):
+                            cols = st.columns(2)
+                            for j in range(2):
+                                if i + j < len(selected_cv_models):
+                                    model = selected_cv_models[i + j]
+                                    model_results = [r for r in all_cv_results if r["Arquitectura"] == model]
+                                    if model_results:
+                                        with cols[j]:
+                                            st.markdown(f"### 📊 {model}")
+                                            
+                                            # Metrics
+                                            col1, col2, col3 = st.columns(3)
+                                            acc_values = [float(r["Accuracy"]) for r in model_results]
+                                            f1_values = [float(r["F1-Score"]) for r in model_results]
+                                            prec_values = [float(r["Precision"]) for r in model_results]
+                                            rec_values = [float(r["Recall"]) for r in model_results]
+                                            
+                                            with col1:
+                                                st.metric("Acc", f"{np.mean(acc_values):.3f}")
+                                                st.metric("Std", f"{np.std(acc_values):.3f}")
+                                            with col2:
+                                                st.metric("F1", f"{np.mean(f1_values):.3f}")
+                                                st.metric("Std", f"{np.std(f1_values):.3f}")
+                                            with col3:
+                                                st.metric("Prec", f"{np.mean(prec_values):.3f}")
+                                                st.metric("Rec", f"{np.mean(rec_values):.3f}")
+                                            
+                                            # Confusion matrix
+                                            if "y_true" in model_results[0] and "y_pred" in model_results[0]:
+                                                from sklearn.metrics import confusion_matrix
+                                                class_names = model_results[0].get("class_names", ["Class 0", "Class 1", "Class 2"])
+                                                n_classes = len(class_names)
+                                                cm_agg = np.zeros((n_classes, n_classes), dtype=int)
+                                                
+                                                for r in model_results:
+                                                    y_true = np.array(r["y_true"])
+                                                    y_pred = np.array(r["y_pred"])
+                                                    cm_agg += confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+                                                
+                                                # Calculate percentages
+                                                cm_percent = cm_agg.astype('float') / cm_agg.sum(axis=1)[:, np.newaxis] * 100
+                                                
+                                                # Create text with both count and percentage
+                                                text_values = []
+                                                for k in range(n_classes):
+                                                    row = []
+                                                    for l in range(n_classes):
+                                                        count = cm_agg[k, l]
+                                                        pct = cm_percent[k, l]
+                                                        row.append(f"{count}<br>({pct:.1f}%)")
+                                                    text_values.append(row)
+                                                
+                                                fig_cm = go.Figure(data=go.Heatmap(
+                                                    z=cm_agg,
+                                                    x=class_names,
+                                                    y=class_names,
+                                                    colorscale='RdYlGn',
+                                                    text=text_values,
+                                                    texttemplate="%{text}",
+                                                    textfont={"size": 11, "color": "black"},
+                                                    colorbar=dict(title="Cantidad", x=1.2),
+                                                    showscale=True
+                                                ))
+                                                fig_cm.update_layout(
+                                                    title=dict(
+                                                        text=f"<b>Matriz de Confusión</b>",
+                                                        font=dict(size=12, color="#1f2937")
+                                                    ),
+                                                    xaxis=dict(
+                                                        title=dict(text="<b>Predicho</b>", font=dict(size=10)),
+                                                        tickfont=dict(size=9)
+                                                    ),
+                                                    yaxis=dict(
+                                                        title=dict(text="<b>Real</b>", font=dict(size=10)),
+                                                        tickfont=dict(size=9)
+                                                    ),
+                                                    height=250,
+                                                    width=450,
+                                                    margin=dict(l=60, r=130, t=40, b=40),
+                                                    paper_bgcolor="white",
+                                                    plot_bgcolor="white"
+                                                )
+                                                st.plotly_chart(fig_cm, use_container_width=True)
                                         st.warning("⚠️ Los resultados de validación cruzada previos no contienen los datos necesarios "
                                                   "(y_true, y_pred) para generar la matriz de confusión. "
                                                   "Ejecute nuevamente la validación cruzada para ver las matrices de confusión.")
