@@ -1,0 +1,14 @@
+{
+  "architecture_name": "cnn_gru",
+  "version_id": "20260929_175959",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-29T18:00:01.010549",
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "model_size_mb": 0.5,
+  "inference_latency_ms": 1010.73
+}

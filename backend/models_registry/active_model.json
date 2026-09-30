@@ -1,20 +1,20 @@
 {
-  "architecture_name": "features_mlp",
-  "version_id": "20260929_112053",
-  "activated_at": "2026-09-29T11:20:54.682245",
+  "architecture_name": "attention",
+  "version_id": "20260929_210608",
+  "activated_at": "2026-09-29T21:06:10.329644",
   "selection_criteria": "Auto-activated after training",
   "metadata": {
-    "architecture_name": "features_mlp",
-    "version_id": "20260929_112053",
+    "architecture_name": "attention",
+    "version_id": "20260929_210608",
     "epochs": 50,
     "batch_size": 32,
-    "trained_at": "2026-09-29T11:20:54.671765",
+    "trained_at": "2026-09-29T21:06:10.316297",
     "class_names": [
       "amusement",
       "baseline",
       "stress"
     ],
-    "model_size_mb": 12.89,
-    "inference_latency_ms": 529.29
+    "model_size_mb": 0.28,
+    "inference_latency_ms": 758.7
   }
 }

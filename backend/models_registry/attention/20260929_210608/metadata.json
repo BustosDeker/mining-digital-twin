@@ -1,0 +1,14 @@
+{
+  "architecture_name": "attention",
+  "version_id": "20260929_210608",
+  "epochs": 50,
+  "batch_size": 32,
+  "trained_at": "2026-09-29T21:06:10.316297",
+  "class_names": [
+    "amusement",
+    "baseline",
+    "stress"
+  ],
+  "model_size_mb": 0.28,
+  "inference_latency_ms": 758.7
+}
