@@ -529,14 +529,13 @@ with tab_eda:
 with tab_training:
     st.header("🤖 Entrenamiento de Modelos")
     
-    st.subheader("6 Arquitecturas Disponibles (incluyendo 2 híbridos)")
+    st.subheader("5 Arquitecturas Disponibles (incluyendo 3 híbridos)")
     
     available_architectures = list(ARCHITECTURE_BUILDERS.keys())
     arch_descriptions = {
         "cnn_lstm": "CNN-1D + LSTM (Híbrido) - Procesamiento de señales crudas",
         "features_mlp": "Features (HRV/EDA) + MLP - Enfoque tradicional",
         "cnn_gru": "CNN-1D + GRU (Híbrido) - Variante con GRU",
-        "gru_lstm": "GRU + LSTM Bidireccional (Híbrido) - Doble recurrente",
         "attention": "Attention-based - Mecanismo de atención temporal",
         "cnn_attention": "CNN + Attention (Híbrido) - Extracción + atención"
     }

@@ -87,28 +87,6 @@ class CNNGRUHyperparams:
 
 
 @dataclass
-class GRULSTMHyperparams:
-    """Hiperparámetros de la arquitectura GRU + LSTM (híbrido bidireccional)."""
-
-    gru_units: int = 64
-    lstm_units: int = 64
-    dropout_rate: float = 0.3
-    learning_rate: float = 1e-3
-    dense_units: int = 32
-    bidirectional: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "gru_units": self.gru_units,
-            "lstm_units": self.lstm_units,
-            "dropout_rate": self.dropout_rate,
-            "learning_rate": self.learning_rate,
-            "dense_units": self.dense_units,
-            "bidirectional": self.bidirectional,
-        }
-
-
-@dataclass
 class AttentionHyperparams:
     """Hiperparámetros de la arquitectura Attention-based."""
 
@@ -254,40 +232,6 @@ def build_cnn_gru_model(
     return model
 
 
-def build_gru_lstm_model(
-    input_shape: tuple[int, int], n_classes: int, hp: GRULSTMHyperparams | None = None
-) -> Any:
-    """GRU + LSTM bidireccional sobre ventanas de señal cruda (híbrido)."""
-    tf = get_tensorflow()
-    if tf is None:
-        raise ImportError("TensorFlow is not available. Cannot build model.")
-    
-    from tensorflow.keras import layers, models
-    
-    hp = hp or GRULSTMHyperparams()
-
-    inputs = layers.Input(shape=input_shape, name="raw_signal_window")
-    
-    if hp.bidirectional:
-        x = layers.Bidirectional(layers.GRU(hp.gru_units, return_sequences=True))(inputs)
-        x = layers.Bidirectional(layers.LSTM(hp.lstm_units))(x)
-    else:
-        x = layers.GRU(hp.gru_units, return_sequences=True)(inputs)
-        x = layers.LSTM(hp.lstm_units)(x)
-    
-    x = layers.Dense(hp.dense_units, activation="relu")(x)
-    x = layers.Dropout(hp.dropout_rate)(x)
-    outputs = layers.Dense(n_classes, activation="softmax", name="stress_class")(x)
-
-    model = models.Model(inputs=inputs, outputs=outputs, name="gru_lstm_stress_classifier")
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=hp.learning_rate),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
-    return model
-
-
 def build_attention_model(
     input_shape: tuple[int, int], n_classes: int, hp: AttentionHyperparams | None = None
 ) -> Any:
@@ -374,7 +318,6 @@ ARCHITECTURE_BUILDERS = {
     "cnn_lstm": build_cnn_lstm_model,
     "features_mlp": build_features_mlp_model,
     "cnn_gru": build_cnn_gru_model,
-    "gru_lstm": build_gru_lstm_model,
     "attention": build_attention_model,
     "cnn_attention": build_cnn_attention_model,
 }
