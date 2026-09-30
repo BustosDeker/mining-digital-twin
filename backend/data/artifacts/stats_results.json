@@ -1,0 +1,139 @@
+{
+  "results": [
+    {
+      "Prueba": "Friedman Chi-square",
+      "Valor": "11.6962",
+      "p-value": "0.0198",
+      "Interpretaci\u00f3n": "Significativo"
+    },
+    {
+      "Prueba": "Wilcoxon (features_mlp vs attention)",
+      "Valor": "0.0000",
+      "p-value": "0.1250",
+      "Interpretaci\u00f3n": "No significativo"
+    },
+    {
+      "Prueba": "Shapiro-Wilk (attention)",
+      "Valor": "0.8956",
+      "p-value": "0.4093",
+      "Interpretaci\u00f3n": "Normal"
+    },
+    {
+      "Prueba": "Shapiro-Wilk (cnn_attention)",
+      "Valor": "0.8975",
+      "p-value": "0.4186",
+      "Interpretaci\u00f3n": "Normal"
+    },
+    {
+      "Prueba": "Shapiro-Wilk (cnn_gru)",
+      "Valor": "0.7553",
+      "p-value": "0.0432",
+      "Interpretaci\u00f3n": "No normal"
+    },
+    {
+      "Prueba": "Shapiro-Wilk (cnn_lstm)",
+      "Valor": "0.7615",
+      "p-value": "0.0492",
+      "Interpretaci\u00f3n": "No normal"
+    },
+    {
+      "Prueba": "Shapiro-Wilk (features_mlp)",
+      "Valor": "0.8594",
+      "p-value": "0.2582",
+      "Interpretaci\u00f3n": "Normal"
+    }
+  ],
+  "config": {
+    "models": [
+      "attention",
+      "cnn_attention",
+      "cnn_gru",
+      "cnn_lstm",
+      "features_mlp"
+    ],
+    "tests": {
+      "wilcoxon": true,
+      "friedman": true,
+      "shapiro": true
+    }
+  },
+  "model_metrics": {
+    "attention": {
+      "accuracy": [
+        0.4136,
+        0.5276,
+        0.5971,
+        0.5745
+      ],
+      "f1": [
+        0.2948,
+        0.2302,
+        0.4746,
+        0.4377
+      ]
+    },
+    "cnn_attention": {
+      "accuracy": [
+        0.2547,
+        0.2463,
+        0.3093,
+        0.3386
+      ],
+      "f1": [
+        0.2235,
+        0.1904,
+        0.1814,
+        0.2547
+      ]
+    },
+    "cnn_gru": {
+      "accuracy": [
+        0.3122,
+        0.7593,
+        0.3025,
+        0.2348
+      ],
+      "f1": [
+        0.1593,
+        0.7611,
+        0.1774,
+        0.1747
+      ]
+    },
+    "cnn_lstm": {
+      "accuracy": [
+        0.3133,
+        0.3386,
+        0.3025,
+        0.1106
+      ],
+      "f1": [
+        0.166,
+        0.2085,
+        0.1797,
+        0.115
+      ]
+    },
+    "features_mlp": {
+      "accuracy": [
+        0.4164,
+        0.8864,
+        0.7077,
+        0.8702
+      ],
+      "f1": [
+        0.3619,
+        0.8212,
+        0.6428,
+        0.8218
+      ]
+    }
+  },
+  "selected_models": [
+    "attention",
+    "cnn_attention",
+    "cnn_gru",
+    "cnn_lstm",
+    "features_mlp"
+  ]
+}

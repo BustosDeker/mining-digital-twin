@@ -960,14 +960,13 @@ with tab_cv:
                         st.info(f"🔄 Entrenando modelo final {best_arch_name} con todos los datos para producción...")
                         
                         from backend.training.architectures import ARCHITECTURE_BUILDERS
-                        model_builder = ARCHITECTURE_BUILDERS[best_arch_name]
-                        model = model_builder.build()
+                        build_model_func = ARCHITECTURE_BUILDERS[best_arch_name]
                         
-                        model.compile(
-                            optimizer='adam',
-                            loss='sparse_categorical_crossentropy',
-                            metrics=['accuracy']
-                        )
+                        # Get input shape and number of classes from data
+                        input_shape = X.shape[1:]
+                        n_classes = len(set(y_names))
+                        
+                        model = build_model_func(input_shape=input_shape, n_classes=n_classes)
                         
                         # Use the loaded data
                         from sklearn.model_selection import train_test_split
@@ -1363,26 +1362,27 @@ with tab_stats:
             st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
                       "y comparar el rendimiento relativo entre arquitecturas.")
             
-            # Detailed analysis
+            # Additional statistical analysis
             st.subheader("📈 Análisis Estadístico Detallado")
             st.write("**Desviación Estándar por Modelo:**")
             std_data = []
-            for model in model_names:
-                if model in model_metrics:
-                    std_data.append({
-                        "Modelo": model,
-                        "Accuracy Std": f"{np.std(model_metrics[model]['accuracy']):.4f}",
-                        "F1-Score Std": f"{np.std(model_metrics[model]['f1']):.4f}",
-                        "Accuracy CV": f"{np.std(model_metrics[model]['accuracy'])/np.mean(model_metrics[model]['accuracy']):.2%}",
-                        "F1-Score CV": f"{np.std(model_metrics[model]['f1'])/np.mean(model_metrics[model]['f1']):.2%}"
-                    })
+            for model in model_metrics.keys():
+                std_data.append({
+                    "Modelo": model,
+                    "Accuracy Std": f"{np.std(model_metrics[model]['accuracy']):.4f}",
+                    "F1-Score Std": f"{np.std(model_metrics[model]['f1']):.4f}",
+                    "Accuracy CV": f"{np.std(model_metrics[model]['accuracy'])/np.mean(model_metrics[model]['accuracy']):.2%}",
+                    "F1-Score CV": f"{np.std(model_metrics[model]['f1'])/np.mean(model_metrics[model]['f1']):.2%}"
+                })
             st.dataframe(pd.DataFrame(std_data), use_container_width=True)
+            st.info("**Interpretación:** Coeficiente de variación (CV) más bajo indica mayor consistencia del modelo across folds.")
             
             if len(model_metrics) >= 2:
                 st.write("**Comparaciones Pareadas (Accuracy):**")
                 paired_data = []
-                for i, model1 in enumerate(model_names):
-                    for j, model2 in enumerate(model_names):
+                model_keys = list(model_metrics.keys())
+                for i, model1 in enumerate(model_keys):
+                    for j, model2 in enumerate(model_keys):
                         if i < j and model1 in model_metrics and model2 in model_metrics:
                             diff = np.mean(model_metrics[model1]["accuracy"]) - np.mean(model_metrics[model2]["accuracy"])
                             paired_data.append({
@@ -1679,8 +1679,7 @@ with tab_stats:
                     # Calculate standard deviations
                     st.write("**Desviación Estándar por Modelo:**")
                     std_data = []
-                    for model in model_names:
-                        if model in model_metrics:
+                    for model in model_metrics.keys():
                             std_data.append({
                                 "Modelo": model,
                                 "Accuracy Std": f"{np.std(model_metrics[model]['accuracy']):.4f}",
@@ -1695,8 +1694,9 @@ with tab_stats:
                     if len(model_metrics) >= 2:
                         st.write("**Comparaciones Pareadas (Accuracy):**")
                         paired_data = []
-                        for i, model1 in enumerate(model_names):
-                            for j, model2 in enumerate(model_names):
+                        model_keys = list(model_metrics.keys())
+                        for i, model1 in enumerate(model_keys):
+                            for j, model2 in enumerate(model_keys):
                                 if i < j and model1 in model_metrics and model2 in model_metrics:
                                     diff = np.mean(model_metrics[model1]["accuracy"]) - np.mean(model_metrics[model2]["accuracy"])
                                     paired_data.append({
