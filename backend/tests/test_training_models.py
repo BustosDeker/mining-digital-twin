@@ -94,6 +94,32 @@ def test_hyperparameter_tuning_tracks_trials(small_windows_and_features):
     assert tuning.best_cv_result is not None
 
 
+def test_model_metadata_preserves_unknown_fields_in_extra():
+    metadata = mr.ModelMetadata.from_dict(
+        {
+            "architecture_name": "attention",
+            "version_id": "20260927_195403",
+            "epochs": 50,
+            "batch_size": 32,
+            "trained_at": "2026-09-27T19:54:03.493043",
+            "class_names": ["0", "1", "2"],
+            "test_accuracy": 0.5282,
+        }
+    )
+
+    assert metadata.dataset_name == "unknown"
+    assert metadata.hyperparams == {"epochs": 50, "batch_size": 32}
+    assert metadata.cv_metrics == {}
+    assert metadata.created_at == "2026-09-27T19:54:03.493043"
+    assert metadata.has_scaler is False
+    assert metadata.extra == {
+        "epochs": 50,
+        "batch_size": 32,
+        "trained_at": "2026-09-27T19:54:03.493043",
+        "test_accuracy": 0.5282,
+    }
+
+
 def test_model_registry_full_cycle(small_windows_and_features, tmp_path, monkeypatch):
     from backend.utils import config as config_module
 

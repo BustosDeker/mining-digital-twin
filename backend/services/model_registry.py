@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import pickle
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,7 +69,20 @@ class ModelMetadata:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ModelMetadata":
-        return cls(**data)
+        known_fields = {field.name for field in fields(cls)}
+        metadata = {key: value for key, value in data.items() if key in known_fields}
+        unknown_fields = {key: value for key, value in data.items() if key not in known_fields}
+        metadata.setdefault("dataset_name", "unknown")
+        metadata.setdefault(
+            "hyperparams",
+            {key: data[key] for key in ("epochs", "batch_size") if key in data},
+        )
+        metadata.setdefault("cv_metrics", {})
+        metadata.setdefault("class_names", [])
+        metadata.setdefault("created_at", data.get("trained_at", ""))
+        metadata.setdefault("has_scaler", False)
+        metadata["extra"] = {**unknown_fields, **(metadata.get("extra") or {})}
+        return cls(**metadata)
 
 
 def _registry_root() -> Path:
