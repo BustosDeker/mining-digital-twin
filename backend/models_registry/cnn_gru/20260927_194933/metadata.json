@@ -8,5 +8,9 @@
     "0",
     "1",
     "2"
-  ]
+  ],
+  "model_size_mb": 0.51,
+  "inference_latency_ms": 352.58,
+  "test_accuracy": 0.4022,
+  "test_f1": 0.318125
 }

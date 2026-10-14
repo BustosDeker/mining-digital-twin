@@ -46,7 +46,7 @@ def _add_confusion_matrix(doc: Document, confusion_mat: np.ndarray, class_names:
     fig.tight_layout()
 
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     
@@ -101,7 +101,7 @@ def _add_comparison_chart(doc: Document, model_metrics: dict[str, dict[str, list
     fig.tight_layout()
     
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     
@@ -141,7 +141,7 @@ def _add_correlation_heatmap(doc: Document, model_metrics: dict[str, dict[str, l
     fig.tight_layout()
     
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     
@@ -174,7 +174,7 @@ def _add_ranking_chart(doc: Document, model_metrics: dict[str, dict[str, list[fl
     fig.tight_layout()
     
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     

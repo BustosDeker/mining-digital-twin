@@ -75,7 +75,7 @@ def _class_distribution(recordings: list[SubjectRecording], out_dir: Path) -> di
     ax.set_ylabel("Número de muestras (a frecuencia nativa)")
     ax.set_title(f"Distribución de clases — {recordings[0].dataset_name}")
     fig.tight_layout()
-    fig.savefig(out_dir / "class_distribution.png", dpi=150)
+    fig.savefig(out_dir / "class_distribution.png", dpi=600)
     plt.close(fig)
 
     return {"aggregate_counts": aggregate.to_dict(), "n_subjects": len(recordings)}
@@ -152,7 +152,7 @@ def _example_signals(
     axes[-1].set_xlabel("Tiempo (s)")
     fig.suptitle(f"Señales de ejemplo (10s) — sujeto {rec.subject_id}")
     fig.tight_layout()
-    fig.savefig(out_dir / "example_signals.png", dpi=150)
+    fig.savefig(out_dir / "example_signals.png", dpi=600)
     plt.close(fig)
 
 
@@ -208,7 +208,7 @@ def _correlation_heatmap(
     sns.heatmap(corr, cmap="coolwarm", center=0, annot=False, ax=ax)
     ax.set_title("Correlación entre features (por ventana)")
     fig.tight_layout()
-    fig.savefig(out_dir / "feature_correlation_heatmap.png", dpi=150)
+    fig.savefig(out_dir / "feature_correlation_heatmap.png", dpi=600)
     plt.close(fig)
 
     corr.to_csv(out_dir / "feature_correlation_matrix.csv")
@@ -394,7 +394,7 @@ def run_eda(loader: DatasetLoader, subject_limit: int | None = None) -> dict[str
             ax.set_ylabel("Número de muestras (a frecuencia nativa)")
             ax.set_title(f"Distribución de clases — {loader.dataset_name}")
             fig.tight_layout()
-            fig.savefig(out_dir / "class_distribution.png", dpi=150)
+            fig.savefig(out_dir / "class_distribution.png", dpi=600)
             plt.close(fig)
 
             class_dist = {"aggregate_counts": aggregate.to_dict(), "n_subjects": len(all_recordings)}
@@ -404,7 +404,7 @@ def run_eda(loader: DatasetLoader, subject_limit: int | None = None) -> dict[str
     ax.set_ylabel("Número de muestras (a frecuencia nativa)")
     ax.set_title(f"Distribución de clases — {loader.dataset_name}")
     fig.tight_layout()
-    fig.savefig(out_dir / "class_distribution.png", dpi=150)
+    fig.savefig(out_dir / "class_distribution.png", dpi=600)
     plt.close(fig)
 
     class_dist = {"aggregate_counts": aggregate.to_dict(), "n_subjects_processed": len(all_recordings), "n_subjects_requested": subject_limit if subject_limit else len(subjects)}

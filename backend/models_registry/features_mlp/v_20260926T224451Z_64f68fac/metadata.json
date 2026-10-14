@@ -38,5 +38,9 @@
       "temp_mean",
       "temp_std"
     ]
-  }
+  },
+  "model_size_mb": 0.03,
+  "inference_latency_ms": 147.13,
+  "test_accuracy": 0.720175,
+  "test_f1": 0.661925
 }

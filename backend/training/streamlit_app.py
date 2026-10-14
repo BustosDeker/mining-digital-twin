@@ -49,6 +49,24 @@ from backend.reports import generate_pdf_report, generate_training_report_to_mem
 from scipy.stats import friedmanchisquare, wilcoxon, shapiro
 from scipy.stats import rankdata
 
+logger = get_logger(__name__)
+
+PLOTLY_EXPORT_SCALE_600_DPI = 600 / 96
+
+
+def render_plotly_chart_600dpi(figure: go.Figure) -> None:
+    st.plotly_chart(
+        figure,
+        use_container_width=True,
+        config={
+            "toImageButtonOptions": {
+                "format": "png",
+                "scale": PLOTLY_EXPORT_SCALE_600_DPI,
+            }
+        },
+    )
+
+
 st.set_page_config(page_title="Motor IA — CRISP-DM Pipeline", layout="wide")
 
 settings = get_settings()
@@ -332,7 +350,7 @@ with tab_eda:
                     title="Distribución de Clases en el Dataset",
                     height=500
                 )
-                st.plotly_chart(fig_class, use_container_width=True)
+                render_plotly_chart_600dpi(fig_class)
             else:
                 st.warning("No hay datos de distribución de clases disponibles")
             
@@ -355,7 +373,7 @@ with tab_eda:
                     title="Proporción de Clases en el Dataset",
                     height=500
                 )
-                st.plotly_chart(fig_pie, use_container_width=True)
+                render_plotly_chart_600dpi(fig_pie)
             else:
                 st.warning("No hay datos de balance de clases disponibles")
             
@@ -401,7 +419,7 @@ with tab_eda:
                             title="Calidad de Señales por Sujeto",
                             height=500
                         )
-                        st.plotly_chart(fig_quality, use_container_width=True)
+                        render_plotly_chart_600dpi(fig_quality)
                         
                         # Calculate average clipping
                         avg_clipping = np.mean(list(subject_clipping.values()))
@@ -431,7 +449,7 @@ with tab_eda:
                                font=dict(size=11))
                 )])
                 fig_channels.update_layout(title="Canales Biométricos Disponibles", height=300)
-                st.plotly_chart(fig_channels, use_container_width=True)
+                render_plotly_chart_600dpi(fig_channels)
             else:
                 st.warning("No hay información de canales disponibles")
             
@@ -515,7 +533,7 @@ with tab_eda:
                                     title="Mapa de Calor de Artefactos por Sujeto/Canal",
                                     height=500
                                 )
-                                st.plotly_chart(fig_artifacts, use_container_width=True)
+                                render_plotly_chart_600dpi(fig_artifacts)
                             else:
                                 st.warning("No hay datos suficientes para generar el mapa de calor")
                         
@@ -867,7 +885,7 @@ with tab_cv:
                                         paper_bgcolor="white",
                                         plot_bgcolor="white"
                                     )
-                                    st.plotly_chart(fig_cm, use_container_width=True)
+                                    render_plotly_chart_600dpi(fig_cm)
             
             st.divider()
         
@@ -1166,7 +1184,7 @@ with tab_cv:
                                                     paper_bgcolor="white",
                                                     plot_bgcolor="white"
                                                 )
-                                                st.plotly_chart(fig_cm, use_container_width=True)
+                                                render_plotly_chart_600dpi(fig_cm)
                                         st.warning("⚠️ Los resultados de validación cruzada previos no contienen los datos necesarios "
                                                   "(y_true, y_pred) para generar la matriz de confusión. "
                                                   "Ejecute nuevamente la validación cruzada para ver las matrices de confusión.")
@@ -1290,7 +1308,7 @@ with tab_stats:
                 yaxis_range=[0, 1.0],
                 height=500
             )
-            st.plotly_chart(fig, use_container_width=True)
+            render_plotly_chart_600dpi(fig)
             st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
                    "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
             st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
@@ -1313,7 +1331,7 @@ with tab_stats:
                 title='Distribución de Accuracy por Modelo (con todos los folds)',
                 height=500
             )
-            st.plotly_chart(fig_box, use_container_width=True)
+            render_plotly_chart_600dpi(fig_box)
             st.info("**Interpretación:** El box plot muestra la distribución de accuracy por modelo. "
                    "La caja representa el rango intercuartílico (50% central de los datos), la línea es la mediana. "
                    "Puntos fuera de la caja son outliers (folds con rendimiento atípico).")
@@ -1336,7 +1354,7 @@ with tab_stats:
                 title='Distribución de F1-Score por Modelo',
                 height=500
             )
-            st.plotly_chart(fig_violin, use_container_width=True)
+            render_plotly_chart_600dpi(fig_violin)
             st.info("**Interpretación:** El violin plot muestra la distribución de F1-score por modelo. "
                    "El ancho indica la densidad de datos en cada valor, permitiendo ver la forma de la distribución.")
             st.success("**Explicabilidad:** Esta visualización combina el box plot con la densidad de probabilidad, "
@@ -1362,7 +1380,7 @@ with tab_stats:
                 title='Relación entre Accuracy y F1-Score por Fold',
                 height=500
             )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            render_plotly_chart_600dpi(fig_scatter)
             st.info("**Interpretación:** El scatter plot muestra la relación entre accuracy y F1-score para cada fold. "
                    "Puntos cerca de la diagonal (1:1) indican balance entre precision y recall.")
             st.success("**Explicabilidad:** Esta visualización ayuda a identificar si un modelo tiene trade-offs entre "
@@ -1396,7 +1414,7 @@ with tab_stats:
                 title='Matriz de Correlación de Accuracy entre Modelos',
                 height=500
             )
-            st.plotly_chart(fig_heatmap, use_container_width=True)
+            render_plotly_chart_600dpi(fig_heatmap)
             st.info("**Interpretación:** La matriz de correlación muestra qué tan similares son los rendimientos de los diferentes modelos en los mismos folds. "
                    "Valores cercanos a 1 indican comportamientos similares, valores bajos sugieren que los modelos capturan patrones diferentes.")
             st.success("**Explicabilidad:** Modelos con alta correlación tienden a cometer errores similares en los mismos folds, "
@@ -1426,7 +1444,7 @@ with tab_stats:
                 title="Ranking de Modelos según Accuracy Promedio",
                 height=400
             )
-            st.plotly_chart(fig, use_container_width=True)
+            render_plotly_chart_600dpi(fig)
             st.info("**Interpretación:** El diagrama muestra el ranking de cada modelo según accuracy promedio. "
                    "Modelos con ranking 1 son los mejores (verde), ranking 2 segundos (naranja), resto en rojo.")
             st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
@@ -1613,7 +1631,7 @@ with tab_stats:
                         yaxis_range=[0, 1.0],
                         height=500
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    render_plotly_chart_600dpi(fig)
                     st.info("**Interpretación:** El gráfico de barras muestra visualmente el rendimiento relativo de cada arquitectura. "
                            "Diferencias significativas entre modelos indican que ciertas arquitecturas capturan mejor los patrones de estrés.")
                     st.success("**Explicabilidad:** La visualización facilita la identificación rápida del mejor modelo y "
@@ -1636,7 +1654,7 @@ with tab_stats:
                         title='Distribución de Accuracy por Modelo (con todos los folds)',
                         height=500
                     )
-                    st.plotly_chart(fig_box, use_container_width=True)
+                    render_plotly_chart_600dpi(fig_box)
                     st.info("**Interpretación:** Los box plots muestran la distribución de accuracy en cada fold. Cajas más altas y compactas indican mejor y más consistente rendimiento.")
                     
                     # Violin plot for F1-Score distribution
@@ -1655,7 +1673,7 @@ with tab_stats:
                         title='Distribución de F1-Score por Modelo',
                         height=500
                     )
-                    st.plotly_chart(fig_violin, use_container_width=True)
+                    render_plotly_chart_600dpi(fig_violin)
                     st.info("**Interpretación:** Los violin plots muestran la densidad de distribución del F1-Score. Formas más anchas indican mayor variabilidad en el rendimiento.")
                     
                     # Scatter plot: Accuracy vs F1-Score
@@ -1678,7 +1696,7 @@ with tab_stats:
                         title='Relación entre Accuracy y F1-Score por Fold',
                         height=500
                     )
-                    st.plotly_chart(fig_scatter, use_container_width=True)
+                    render_plotly_chart_600dpi(fig_scatter)
                     st.info("**Interpretación:** Puntos cercanos a la diagonal (1:1) indican balance entre accuracy y F1-Score. Modelos con ambos valores altos son preferibles.")
                     
                     # Heatmap of correlations between models
@@ -1709,7 +1727,7 @@ with tab_stats:
                         title='Matriz de Correlación de Accuracy entre Modelos',
                         height=500
                     )
-                    st.plotly_chart(fig_heatmap, use_container_width=True)
+                    render_plotly_chart_600dpi(fig_heatmap)
                     st.info("**Interpretación:** Valores cercanos a 1 indican que los modelos tienen rendimiento similar en los mismos folds. Valores bajos sugieren comportamientos distintos.")
                     
                     # Nemenyi-like ranking based on mean accuracy
@@ -1737,7 +1755,7 @@ with tab_stats:
                         title="Ranking de Modelos según Accuracy Promedio",
                         height=400
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    render_plotly_chart_600dpi(fig)
                     st.info("**Interpretación:** El diagrama muestra el ranking de cada modelo según accuracy promedio. "
                            "Modelos con ranking 1 son los mejores.")
                     st.success("**Explicabilidad:** El ranking visual permite identificar rápidamente el mejor modelo "
@@ -1931,9 +1949,16 @@ with tab_selection:
                         for version_dir in arch_dir.iterdir():
                             if version_dir.is_dir():
                                 metadata_path = version_dir / "metadata.json"
-                                model_path = version_dir / "model.keras"
+                                model_path = next(
+                                    (
+                                        path
+                                        for path in (version_dir / "model.keras", version_dir / "model.h5")
+                                        if path.exists()
+                                    ),
+                                    None,
+                                )
                                 
-                                if metadata_path.exists() and model_path.exists():
+                                if metadata_path.exists() and model_path is not None:
                                     try:
                                         with open(metadata_path) as f:
                                             metadata = json.load(f)
@@ -1948,11 +1973,19 @@ with tab_selection:
                                             try:
                                                 from tensorflow.keras.models import load_model
                                                 model = load_model(str(model_path))
-                                                # Create dummy input based on architecture
-                                                if arch_dir.name == "features_mlp":
-                                                    dummy_input = np.random.randn(1, 100)  # Approximate feature size
-                                                else:
-                                                    dummy_input = np.random.randn(1, 50, 9)  # sequence_length, channels
+                                                dummy_inputs = [
+                                                    np.zeros(
+                                                        tuple(
+                                                            1 if dimension is None else int(dimension)
+                                                            for dimension in model_input.shape
+                                                        ),
+                                                        dtype=np.float32,
+                                                    )
+                                                    for model_input in model.inputs
+                                                ]
+                                                dummy_input = (
+                                                    dummy_inputs[0] if len(dummy_inputs) == 1 else dummy_inputs
+                                                )
                                                 
                                                 start_time = time.time()
                                                 _ = model.predict(dummy_input, verbose=0)
@@ -1966,8 +1999,16 @@ with tab_selection:
                                             if st.session_state.cv_results:
                                                 cv_results_for_arch = [r for r in st.session_state.cv_results if r["Arquitectura"] == arch_dir.name]
                                                 if cv_results_for_arch:
-                                                    metadata["test_accuracy"] = float(np.mean([r["Accuracy"] for r in cv_results_for_arch]))
-                                                    metadata["test_f1"] = float(np.mean([r["F1-Score"] for r in cv_results_for_arch]))
+                                                    for source_key, metadata_key in (
+                                                        ("Accuracy", "test_accuracy"),
+                                                        ("F1-Score", "test_f1"),
+                                                    ):
+                                                        values = pd.to_numeric(
+                                                            pd.Series([r.get(source_key) for r in cv_results_for_arch]),
+                                                            errors="coerce",
+                                                        ).dropna()
+                                                        if not values.empty:
+                                                            metadata[metadata_key] = float(values.mean())
                                         
                                         # Save updated metadata
                                         with open(metadata_path, "w") as f:
@@ -2021,53 +2062,88 @@ with tab_selection:
             # Extract real data from models
             plot_data = []
             for row in model_data:
-                acc = row["Accuracy"]
-                lat = row["Latencia (ms)"]
-                size_mb = row["Tamaño (MB)"]
-                if acc != "N/A" and lat != "N/A" and size_mb != "N/A":
-                    plot_data.append({
-                        "architecture": row["Arquitectura"],
-                        "version": row["Versión"],
-                        "accuracy": float(acc),
-                        "latency": float(lat),
-                        "size_mb": float(size_mb)
-                    })
+                try:
+                    accuracy = float(row["Accuracy"])
+                    latency = float(row["Latencia (ms)"])
+                    size_mb = float(row["Tamaño (MB)"])
+                except (TypeError, ValueError):
+                    continue
+
+                if not all(np.isfinite(value) for value in (accuracy, latency, size_mb)):
+                    continue
+
+                plot_data.append({
+                    "architecture": row["Arquitectura"],
+                    "version": row["Versión"],
+                    "accuracy": accuracy,
+                    "latency": latency,
+                    "size_mb": size_mb,
+                })
             
             if plot_data:
                 fig = go.Figure()
-                
-                for item in plot_data:
+
+                architectures = sorted({item["architecture"] for item in plot_data})
+                max_model_size = max(item["size_mb"] for item in plot_data)
+                size_ref = 2 * max_model_size / 28**2
+                palette = px.colors.qualitative.Safe
+
+                for index, architecture in enumerate(architectures):
+                    architecture_data = [
+                        item for item in plot_data if item["architecture"] == architecture
+                    ]
                     fig.add_trace(go.Scatter(
-                        x=[item["latency"]],
-                        y=[item["accuracy"]],
-                        name=f"{item['architecture']} ({item['version']})",
-                        mode='markers',
+                        x=[item["latency"] for item in architecture_data],
+                        y=[item["accuracy"] for item in architecture_data],
+                        name=architecture,
+                        mode="markers",
                         marker=dict(
-                            size=item["size_mb"] * 3,
-                            sizemode='diameter',
-                            color=item["accuracy"],
-                            colorscale='Viridis',
-                            showscale=True,
-                            colorbar=dict(title="Accuracy"),
-                            line=dict(width=2)
+                            size=[item["size_mb"] for item in architecture_data],
+                            sizemode="area",
+                            sizeref=size_ref,
+                            sizemin=9,
+                            color=palette[index % len(palette)],
+                            opacity=0.85,
+                            line=dict(width=1, color="white"),
                         ),
-                        text=f"{item['architecture']}<br>Latencia: {item['latency']}ms<br>Tamaño: {item['size_mb']}MB",
-                        hovertemplate='%{text}<br>Accuracy: %{y:.4f}<extra></extra>'
+                        customdata=[
+                            [item["version"], item["size_mb"]]
+                            for item in architecture_data
+                        ],
+                        hovertemplate=(
+                            "<b>%{fullData.name}</b><br>"
+                            "Versión: %{customdata[0]}<br>"
+                            "Latencia: %{x:.1f} ms<br>"
+                            "Accuracy: %{y:.4f}<br>"
+                            "Tamaño: %{customdata[1]:.2f} MB<extra></extra>"
+                        ),
                     ))
                 
                 fig.update_layout(
                     xaxis_title="Latencia de Inferencia (ms)",
                     yaxis_title="Accuracy",
                     title="Trade-off: Rendimiento vs Recursos Computacionales",
-                    height=600,
-                    hovermode='closest'
+                    height=500,
+                    hovermode="closest",
+                    margin=dict(l=60, r=205, t=70, b=55),
+                    legend=dict(
+                        title=dict(text="Arquitectura"),
+                        orientation="v",
+                        yanchor="middle",
+                        y=0.5,
+                        xanchor="left",
+                        x=1.02,
+                    ),
                 )
-                fig.update_xaxes(range=[0, max([d["latency"] for d in plot_data]) * 1.1])
-                fig.update_yaxes(range=[min([d["accuracy"] for d in plot_data]) * 0.95, 1.0])
+                fig.update_xaxes(range=[0, max(item["latency"] for item in plot_data) * 1.1])
+                fig.update_yaxes(
+                    range=[max(0, min(item["accuracy"] for item in plot_data) * 0.95), 1.0]
+                )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                render_plotly_chart_600dpi(fig)
                 st.info("**Interpretación:** El gráfico muestra el trade-off entre rendimiento (accuracy) y recursos "
-                       "(latencia, tamaño). Tamaño del punto = tamaño del modelo. Color = accuracy. "
+                       "(latencia, tamaño). El color identifica la arquitectura; el tamaño del punto representa el modelo "
+                       "(pasa el cursor para ver los MB exactos). "
                        "Modelos en la esquina superior izquierda (baja latencia, alto accuracy) son óptimos.")
                 st.success("**Explicabilidad:** Esta visualización es crucial para deployment en edge computing donde "
                           "los recursos son limitados, permitiendo seleccionar el mejor balance rendimiento-recursos.")

@@ -60,7 +60,7 @@ def _confusion_matrix_image(confusion_mat: np.ndarray, class_names: list[str], t
     fig.tight_layout()
 
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     return Image(buffer, width=9 * cm, height=8 * cm)
@@ -113,7 +113,7 @@ def _comparison_chart_image(model_metrics: dict[str, dict[str, list[float]]], mo
     fig.tight_layout()
     
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     return Image(buffer, width=12 * cm, height=7 * cm)
@@ -151,7 +151,7 @@ def _correlation_heatmap_image(model_metrics: dict[str, dict[str, list[float]]],
     fig.tight_layout()
     
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     return Image(buffer, width=10 * cm, height=8 * cm)
@@ -182,7 +182,7 @@ def _ranking_chart_image(model_metrics: dict[str, dict[str, list[float]]]) -> Im
     fig.tight_layout()
     
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", dpi=140)
+    fig.savefig(buffer, format="png", dpi=600)
     plt.close(fig)
     buffer.seek(0)
     return Image(buffer, width=10 * cm, height=6 * cm)

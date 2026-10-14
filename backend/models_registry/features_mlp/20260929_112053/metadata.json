@@ -10,5 +10,7 @@
     "stress"
   ],
   "model_size_mb": 12.89,
-  "inference_latency_ms": 529.29
+  "inference_latency_ms": 529.29,
+  "test_accuracy": 0.720175,
+  "test_f1": 0.661925
 }
