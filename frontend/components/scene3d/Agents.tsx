@@ -1,206 +1,94 @@
 "use client";
 
-import { useMemo } from "react";
-import type { AgentSnapshot, MineNode } from "@/lib/types";
-import { backendToThreePosition, lerpPosition } from "./geometry";
-import { SCENE_COLORS } from "./colors";
+import { useMemo, useLayoutEffect, useEffect, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import type { AgentSnapshot, AgentStatus, MineNode } from "@/lib/types";
+import { backendToThreePosition } from "./geometry";
+import { SCENE_COLORS as C } from "./colors";
+import { AgentMotion } from "./agentMotion";
+import { createWorkerRig, WORKER_PARTS } from "./MineWorker";
 
 interface AgentsProps {
-  nodes: MineNode[];
-  agents: Record<string, AgentSnapshot>;
-  followedAgentId: string | null;
-  onSelectAgent: (agentId: string) => void;
-  performanceMode: boolean;
+  nodes: MineNode[]; agents: Record<string, AgentSnapshot>; followedAgentId: string | null;
+  onSelectAgent: (id: string) => void; performanceMode: boolean;
 }
+const STATUS: Record<AgentStatus, string> = { moving: C.agentMoving, waiting: C.agentWaiting,
+  sheltered: C.agentSheltered, evacuated: C.agentEvacuated, lost: C.agentLost };
 
-const PANIC_HIGHLIGHT_THRESHOLD = 0.6;
+export function Agents({ nodes, agents, followedAgentId, onSelectAgent, performanceMode }: AgentsProps) {
+  const positions = useMemo(() => new Map(nodes.map(n => [n.node_id, new THREE.Vector3(...backendToThreePosition(n.position))])), [nodes]);
+  const motions = useRef(new Map<number, AgentMotion>());
+  const oldPositions = useRef(positions);
+  const meshes = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const rig = useMemo(createWorkerRig, []);
+  const color = useMemo(() => new THREE.Color(), []);
+  const workers = useMemo(() => Object.values(agents).filter(a => a.status !== "evacuated" && positions.has(a.node_id)), [agents, positions]);
+  const parts = useMemo(() => WORKER_PARTS.filter(p => !performanceMode || !p.detail), [performanceMode]);
+  const geometry = useMemo(() => ({ box: new THREE.BoxGeometry(1, 1, 1),
+    round: new THREE.SphereGeometry(1, performanceMode ? 6 : 10, performanceMode ? 4 : 8),
+    helmet: new THREE.SphereGeometry(1, performanceMode ? 6 : 10, 4, 0, Math.PI * 2, 0, Math.PI / 2),
+    ring: new THREE.RingGeometry(0.86, 1, performanceMode ? 12 : 24) }), [performanceMode]);
+  const materials = useMemo(() => ({ standard: new THREE.MeshStandardMaterial({ roughness: 0.78 }),
+    basic: new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }) }), []);
+  useEffect(() => () => Object.values(geometry).forEach(g => g.dispose()), [geometry]);
+  useEffect(() => () => Object.values(materials).forEach(m => m.dispose()), [materials]);
+  useLayoutEffect(() => {
+    const now = performance.now(), states = motions.current;
+    // MineGraphScene is already keyed by session_id; remounts isolate sessions.
+    // Stable nodes identity changes on layout changes. A distance rollback is
+    // authoritative evidence of reset, including workers already at rest.
+    const reset = oldPositions.current !== positions || workers.some(a => {
+      const old = states.get(a.agent_id);
+      return old && a.cumulative_distance_m + 0.05 < old.agent.cumulative_distance_m;
+    });
+    if (reset) states.clear();
+    oldPositions.current = positions;
+    const active = new Set(workers.map(a => a.agent_id));
+    states.forEach((_, id) => { if (!active.has(id)) states.delete(id); });
+    workers.forEach(a => {
+      const motion = states.get(a.agent_id);
+      if (!motion || !motion.receive(a, positions, now)) states.set(a.agent_id, new AgentMotion(a, positions, now));
+    });
+    parts.forEach((part, p) => {
+      const mesh = meshes.current[p];
+      if (!mesh) return;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      workers.forEach((a, i) => mesh.setColorAt(i, color.set(part.indicator === "status" ? STATUS[a.status] : part.color)));
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
+  }, [workers, positions, parts, color]);
 
-const COLOR_BY_STATUS: Record<string, string> = {
-  moving: SCENE_COLORS.agentMoving,
-  waiting: SCENE_COLORS.agentWaiting,
-  sheltered: SCENE_COLORS.agentSheltered,
-  evacuated: SCENE_COLORS.agentEvacuated,
-  lost: SCENE_COLORS.agentLost,
-};
+  // Single frame callback; no per-worker React updates or per-frame math objects.
+  useFrame((_, delta) => {
+    workers.forEach((a, i) => {
+      const motion = motions.current.get(a.agent_id);
+      if (!motion) return;
+      motion.advance(delta); rig.pose(motion, performanceMode);
+      parts.forEach((part, p) => {
+        const hidden = part.indicator === "panic" && a.panic_level < 0.6
+          || part.indicator === "follow" && followedAgentId !== String(a.agent_id);
+        meshes.current[p]?.setMatrixAt(i, rig.matrix(part, hidden));
+      });
+    });
+    parts.forEach((_, p) => {
+      const mesh = meshes.current[p];
+      if (!mesh) return;
+      mesh.instanceMatrix.needsUpdate = true;
+      // Raycasting needs current bounds even with frustum culling disabled.
+      mesh.computeBoundingSphere();
+    });
+  }, -1);
 
-// Componente para representar un minero de forma más detallada
-function MinerFigure({ color, isPanicked, isFollowed }: { color: string; isPanicked: boolean; isFollowed: boolean }) {
-  return (
-    <group>
-      {/* Torso */}
-      <mesh position={[0, 0.05, 0]}>
-        <boxGeometry args={[0.08, 0.15, 0.05]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.3}
-          roughness={0.5}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      {/* Cabeza */}
-      <mesh position={[0, 0.15, 0]}>
-        <sphereGeometry args={[0.04, 16, 16]} />
-        <meshStandardMaterial
-          color="#FFE4C4"
-          emissive="#FFE4C4"
-          emissiveIntensity={0.15}
-          roughness={0.6}
-          metalness={0.05}
-        />
-      </mesh>
-      
-      {/* Casco de seguridad */}
-      <mesh position={[0, 0.17, 0]}>
-        <sphereGeometry args={[0.045, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial
-          color="#FFD700"
-          emissive="#FFD700"
-          emissiveIntensity={0.25}
-          roughness={0.3}
-          metalness={0.4}
-        />
-      </mesh>
-      
-      {/* Linterna del casco */}
-      <mesh position={[0, 0.18, 0.035]} rotation={[Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.012, 0.035, 8]} />
-        <meshBasicMaterial
-          color="#FFFF00"
-          transparent
-          opacity={0.9}
-        />
-      </mesh>
-      
-      {/* Brazo izquierdo */}
-      <mesh position={[-0.06, 0.05, 0]}>
-        <capsuleGeometry args={[0.015, 0.1, 4, 8]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.3}
-          roughness={0.5}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      {/* Brazo derecho */}
-      <mesh position={[0.06, 0.05, 0]}>
-        <capsuleGeometry args={[0.015, 0.1, 4, 8]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={0.3}
-          roughness={0.5}
-          metalness={0.1}
-        />
-      </mesh>
-      
-      {/* Pierna izquierda */}
-      <mesh position={[-0.025, -0.08, 0]}>
-        <capsuleGeometry args={[0.018, 0.12, 4, 8]} />
-        <meshStandardMaterial
-          color="#2C3E50"
-          emissive="#2C3E50"
-          emissiveIntensity={0.1}
-          roughness={0.6}
-          metalness={0.05}
-        />
-      </mesh>
-      
-      {/* Pierna derecha */}
-      <mesh position={[0.025, -0.08, 0]}>
-        <capsuleGeometry args={[0.018, 0.12, 4, 8]} />
-        <meshStandardMaterial
-          color="#2C3E50"
-          emissive="#2C3E50"
-          emissiveIntensity={0.1}
-          roughness={0.6}
-          metalness={0.05}
-        />
-      </mesh>
-
-      {/* Halo de pánico */}
-      {isPanicked && (
-        <mesh scale={[1.4, 1.4, 1.4]}>
-          <sphereGeometry args={[0.1, 16, 16]} />
-          <meshBasicMaterial
-            color={SCENE_COLORS.agentPanicHalo}
-            transparent
-            opacity={0.25}
-            depthWrite={false}
-          />
-        </mesh>
-      )}
-
-      {/* Indicador de seguimiento */}
-      {isFollowed && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.15, 0]}>
-          <ringGeometry args={[0.12, 0.16, 32]} />
-          <meshBasicMaterial 
-            color={SCENE_COLORS.agentEvacuated}
-            transparent
-            opacity={0.8}
-          />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
-export function Agents({
-  nodes,
-  agents,
-  followedAgentId,
-  onSelectAgent,
-  performanceMode,
-}: AgentsProps) {
-  const nodePositions = useMemo(() => {
-    const map = new Map<string, [number, number, number]>();
-    for (const node of nodes) {
-      map.set(node.node_id, backendToThreePosition(node.position));
-    }
-    return map;
-  }, [nodes]);
-
-  const visibleAgents = Object.values(agents).filter(
-    (a) => a.status !== "evacuated"
-  );
-
-  return (
-    <group>
-      {visibleAgents.map((agent) => {
-        const from = nodePositions.get(agent.node_id);
-        const to = nodePositions.get(agent.next_node_id) ?? from;
-        if (!from || !to) return null;
-
-        const position = lerpPosition(from, to, agent.progress);
-        const color = COLOR_BY_STATUS[agent.status] ?? SCENE_COLORS.agentMoving;
-        const isPanicked = agent.panic_level >= PANIC_HIGHLIGHT_THRESHOLD;
-        const isFollowed = followedAgentId === String(agent.agent_id);
-
-        return (
-          <group
-            key={agent.agent_id}
-            position={position}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectAgent(String(agent.agent_id));
-            }}
-          >
-            {!performanceMode && (
-              <MinerFigure color={color} isPanicked={isPanicked} isFollowed={isFollowed} />
-            )}
-            {performanceMode && (
-              <mesh>
-                <sphereGeometry args={[0.18, 8, 8]} />
-                <meshBasicMaterial color={color} />
-              </mesh>
-            )}
-          </group>
-        );
-      })}
-    </group>
-  );
+  if (!workers.length) return null;
+  // R3F owns each InstancedMesh and releases its instance buffers on removal.
+  // Geometry/material are constructor arguments, not declarative children:
+  // their shared lifetime is managed by the effects above. Do not set
+  // dispose={null}: it replaces the mesh's actual dispose method with null.
+  return <group>{parts.map((part, p) => <instancedMesh key={`${WORKER_PARTS.indexOf(part)}:${workers.length}`}
+    ref={mesh => { meshes.current[p] = mesh; }} args={[geometry[part.shape], part.basic ? materials.basic : materials.standard, workers.length]}
+    frustumCulled={false} onClick={e => {
+      if (e.instanceId === undefined || !workers[e.instanceId]) return;
+      e.stopPropagation(); onSelectAgent(String(workers[e.instanceId].agent_id));
+    }} />)}</group>;
 }

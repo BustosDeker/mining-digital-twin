@@ -45,7 +45,7 @@ function ControlButton({
       aria-pressed={pressed}
       title={title}
       className={clsx(
-        "rounded-sm border px-4 py-2 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+        "rounded-sm border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary"
           ? "border-signal/40 text-signal hover:bg-signal/10"
           : "border-hairline text-steel2 hover:bg-panel2"
@@ -78,7 +78,8 @@ export function ControlBar({
   const isRunning = status === "running";
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-panel px-4 py-2">
+    <div className="twin-controls flex flex-wrap items-center gap-2 border-b border-hairline bg-panel px-4 py-2">
+      <span className="twin-eyebrow">{t.twin.simulation}</span>
       <ControlButton
         label={`▶ ${t.controls.start}`}
         onClick={onStart}
@@ -96,6 +97,7 @@ export function ControlBar({
 
       <div className="mx-2 h-5 w-px bg-hairline" />
 
+      <span className="twin-eyebrow">{t.twin.visualization}</span>
       <ControlButton
         label={`↔ ${t.controls.pan}`}
         onClick={() => onPanModeChange(!panMode)}
@@ -104,7 +106,7 @@ export function ControlBar({
         title={t.controls.panHint}
       />
 
-      <label className="flex items-center gap-2 font-mono text-[11px] text-steel">
+      <label title={t.twin.opacityHint} className="flex items-center gap-2 font-mono text-[11px] text-steel">
         {t.controls.opacity}
         <input
           type="range"
@@ -136,6 +138,7 @@ export function ControlBar({
         />
         {t.controls.performance}
       </label>
+      {status && <span className="ml-auto rounded-sm border border-hairline px-2 py-1 font-mono text-[10px] text-steel2">{t.status[status]}</span>}
     </div>
   );
 }

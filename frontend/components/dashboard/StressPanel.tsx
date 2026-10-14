@@ -11,7 +11,7 @@ interface StressPanelProps {
 
 function StatRow({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
-    <div className="flex items-center justify-between py-2 text-[14px]">
+    <div className="twin-stat">
       <span className="text-steel">{label}</span>
       <span className="font-mono font-medium" style={{ color }}>
         {value}
@@ -42,8 +42,8 @@ export function StressPanel({ agents, step }: StressPanelProps) {
   const panicPct = Math.round(stats.avgPanic * 100);
 
   return (
-    <div className="border-b border-hairline p-5">
-      <h3 className="mb-3 text-[14px] font-semibold uppercase tracking-wide text-steel">
+    <div className="border-b border-hairline p-4">
+      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-steel">
         {t.stressPanel.title}
       </h3>
 
@@ -58,17 +58,19 @@ export function StressPanel({ agents, step }: StressPanelProps) {
             style={{
               width: `${panicPct}%`,
               backgroundColor:
-                panicPct >= 60 ? "#FF5C5C" : panicPct >= 30 ? "#FFB020" : "#33FFB2",
+                panicPct >= 60 ? "var(--twin-red)" : panicPct >= 30 ? "var(--twin-amber)" : "var(--twin-safe)",
             }}
           />
         </div>
       </div>
 
-      <StatRow label={t.stressPanel.moving} value={stats.moving} color="#ECEDE9" />
-      <StatRow label={t.stressPanel.evacuated} value={stats.evacuated} color="#33FFB2" />
-      <StatRow label={t.stressPanel.sheltered} value={stats.sheltered} color="#5FA8FF" />
-      <StatRow label={t.stressPanel.lost} value={stats.lost} color="#FF5C5C" />
+      <div className="twin-stats">
+      <StatRow label={t.stressPanel.moving} value={stats.moving} color="var(--twin-ink)" />
+      <StatRow label={t.stressPanel.evacuated} value={stats.evacuated} color="var(--twin-safe)" />
+      <StatRow label={t.stressPanel.sheltered} value={stats.sheltered} color="var(--twin-blue)" />
+      <StatRow label={t.stressPanel.lost} value={stats.lost} color="var(--twin-red)" />
 
+      </div>
       <div className="mt-3 border-t border-hairline pt-3 text-[13px] text-steel">
         {t.stressPanel.step}: <span className="font-mono text-steel2">{step}</span>
       </div>

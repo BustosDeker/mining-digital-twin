@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import "@/components/scene3d/twin.css";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TopBar, type DashboardTab } from "@/components/dashboard/TopBar";
 import { ControlBar } from "@/components/dashboard/ControlBar";
 import { ScenarioLauncherPanel } from "@/components/dashboard/ScenarioLauncherPanel";
@@ -16,7 +17,7 @@ import { useSimulationSocket } from "@/hooks/useSimulationSocket";
 import { useI18n } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { api } from "@/lib/api";
-import type { CreateSessionInput } from "@/lib/types";
+import type { CreateSessionInput, SimulationSnapshot } from "@/lib/types";
 
 // react-three-fiber usa WebGL/DOM: debe cargarse solo en cliente.
 const MineGraphScene = dynamic(
@@ -37,17 +38,37 @@ export default function DashboardPage() {
   const [performanceMode, setPerformanceMode] = useState(false);
   const [panMode, setPanMode] = useState(false);
 
-  const { snapshot, connected } = useSimulationSocket(sessionId);
+  const { snapshot: streamSnapshot, connected } = useSimulationSocket(sessionId);
+  const [lastSnapshot, setLastSnapshot] = useState<SimulationSnapshot | null>(null);
+  const activeSession = useRef(sessionId);
+  activeSession.current = sessionId;
+  const [controlError, setControlError] = useState<string | null>(null);
+  // Pause/stop/reset do not broadcast. Read their authoritative result through
+  // the existing REST API; the next snapshot for this session resumes live updates.
+  useEffect(() => {
+    if (streamSnapshot?.session_id === sessionId) setLastSnapshot(streamSnapshot);
+  }, [streamSnapshot, sessionId]);
+  const snapshot = lastSnapshot?.session_id === sessionId ? lastSnapshot : null;
+
+  const cancelFollow = useCallback(() => setFollowedAgentId(null), []);
 
   const handleLaunch = useCallback(async (payload: CreateSessionInput) => {
     const session = await api.createSession(payload);
     setSessionId(session.session_id);
     setFollowedAgentId(null);
+    setControlError(null);
   }, []);
 
   const withSession = (fn: (sid: string) => Promise<unknown>) => async () => {
     if (!sessionId) return;
-    await fn(sessionId);
+    setControlError(null);
+    try {
+      await fn(sessionId);
+      const refreshed = await api.getSessionState(sessionId);
+      if (activeSession.current === sessionId) setLastSnapshot(refreshed);
+    } catch (cause) {
+      setControlError(cause instanceof Error ? cause.message : t.common.error);
+    }
   };
 
   const handleStart = withSession(api.startSession);
@@ -72,7 +93,7 @@ export default function DashboardPage() {
       />
 
       {activeTab === "twin" && (
-        <>
+        <div className="twin-workspace flex min-h-0 flex-1 flex-col" data-theme={theme}>
           <ControlBar
             status={snapshot?.status ?? null}
             onStart={handleStart}
@@ -92,13 +113,17 @@ export default function DashboardPage() {
             onPerformanceModeChange={setPerformanceMode}
           />
 
+          {controlError && <p role="alert" className="border-b border-hairline bg-panel px-4 py-2 text-xs text-red">{controlError}</p>}
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-            <div className="relative min-h-0 flex-1">
+            <div className="relative min-h-0 min-w-0 flex-1">
               {snapshot ? (
                 <MineGraphScene
+                  key={snapshot.session_id}
                   nodes={snapshot.nodes}
                   edges={snapshot.edges}
                   agents={snapshot.agents}
+                  hazards={snapshot.active_hazards}
+                  onCancelFollow={cancelFollow}
                   tunnelOpacity={tunnelOpacity}
                   panMode={panMode}
                   showLabels={showLabels}
@@ -108,8 +133,12 @@ export default function DashboardPage() {
                   theme={theme}
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-[13px] text-steel">
-                  {sessionId ? t.common.loading : t.controls.newScenario}
+                <div className="twin-empty">
+                  <span className="twin-eyebrow">{t.twin.operations}</span>
+                  <div className="twin-empty-icon" aria-hidden="true">⌑</div>
+                  <h1>{sessionId ? t.common.loading : t.twin.emptyTitle}</h1>
+                  <p>{t.twin.emptyDescription}</p>
+                  {!sessionId && <button onClick={() => setLauncherOpen(true)}>+ {t.controls.newScenario}</button>}
                 </div>
               )}
 
@@ -120,13 +149,13 @@ export default function DashboardPage() {
               />
             </div>
 
-            <aside className="panel-scroll h-52 w-full shrink-0 overflow-y-auto border-t border-hairline bg-panel md:h-auto md:w-96 md:border-l md:border-t-0">
+            <aside className="panel-scroll h-52 w-full shrink-0 overflow-y-auto border-t border-hairline bg-panel md:h-auto md:w-72 xl:w-80 md:border-l md:border-t-0">
               <StressPanel agents={snapshot?.agents ?? {}} step={snapshot?.step ?? 0} />
               <EventLogPanel hazards={snapshot?.active_hazards ?? []} />
               <LegendPanel />
             </aside>
           </div>
-        </>
+        </div>
       )}
 
       {activeTab === "ml" && (

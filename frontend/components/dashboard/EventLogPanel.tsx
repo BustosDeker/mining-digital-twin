@@ -22,14 +22,15 @@ export function EventLogPanel({ hazards }: { hazards: HazardEvent[] }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {hazards.map((h) => (
-            <li key={h.event_id} className="rounded-sm border border-amber/30 bg-amber/5 p-2 text-[11px]">
+            <li key={h.event_id} className="twin-event" data-hazard={h.hazard_type}>
               <div className="flex items-center justify-between font-medium text-amber">
-                <span>{t.scenario[HAZARD_LABEL_KEY[h.hazard_type]]}</span>
+                <span>{h.hazard_type === "fire" ? "♨" : h.hazard_type === "collapse" ? "▧" : "≋"} {t.scenario[HAZARD_LABEL_KEY[h.hazard_type]]}</span>
                 <span className="font-mono">{Math.round(h.intensity * 100)}%</span>
               </div>
               <div className="mt-0.5 font-mono text-steel">
                 {h.origin_node_id} · {t.eventLog.startedAtStep} {h.started_at_step}
               </div>
+              <div className="mt-1 text-steel">{t.twin.affected}: {h.affected_edges.length}</div>
             </li>
           ))}
         </ul>
@@ -39,13 +40,13 @@ export function EventLogPanel({ hazards }: { hazards: HazardEvent[] }) {
 }
 
 const LEGEND_ITEMS: { key: keyof ReturnType<typeof useI18n>["t"]["legend"]; color: string }[] = [
-  { key: "clear", color: "#33FFB2" },
-  { key: "degraded", color: "#FFB020" },
-  { key: "blocked", color: "#FF5C5C" },
-  { key: "exit", color: "#33FFB2" },
-  { key: "refuge", color: "#5FA8FF" },
-  { key: "riskZone", color: "#FFB020" },
-  { key: "agent", color: "#ECEDE9" },
+  { key: "clear", color: "var(--twin-safe)" },
+  { key: "degraded", color: "var(--twin-amber)" },
+  { key: "blocked", color: "var(--twin-red)" },
+  { key: "exit", color: "var(--twin-safe)" },
+  { key: "refuge", color: "var(--twin-blue)" },
+  { key: "riskZone", color: "var(--twin-amber)" },
+  { key: "agent", color: "var(--twin-ink)" },
 ];
 
 export function LegendPanel() {
@@ -59,9 +60,9 @@ export function LegendPanel() {
         {LEGEND_ITEMS.map((item) => (
           <li key={item.key} className="flex items-center gap-1.5 text-[11px] text-steel">
             <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: item.color }}
-            />
+              className="twin-legend-symbol"
+              style={{ color: item.color }}
+            >{({clear: "━", degraded: "!", blocked: "×", exit: "⇥", refuge: "+", riskZone: "△", agent: "●"} as Record<string, string>)[item.key]}</span>
             {t.legend[item.key]}
           </li>
         ))}

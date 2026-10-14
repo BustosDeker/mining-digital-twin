@@ -1,66 +1,44 @@
 "use client";
 
 import { useMemo } from "react";
-import { Html } from "@react-three/drei";
-import type { MineNode } from "@/lib/types";
+import type { MineNode, MineEdge } from "@/lib/types";
 import { backendToThreePosition } from "./geometry";
-import { SCENE_COLORS } from "./colors";
+import { SCENE_COLORS as C } from "./colors";
 
 interface NodeMarkersProps {
-  nodes: MineNode[];
-  showLabels: boolean;
+  nodes: MineNode[]; edges: MineEdge[]; onSelectNode: (id: string) => void;
 }
 
-const SIZE_BY_TYPE: Record<string, number> = {
-  exit: 0.42,
-  refuge_chamber: 0.36,
-  risk_zone: 0.3,
-  intersection: 0.18,
-  gallery: 0.1,
-};
-
-const COLOR_BY_TYPE: Record<string, string> = {
-  exit: SCENE_COLORS.exit,
-  refuge_chamber: SCENE_COLORS.refuge,
-  risk_zone: SCENE_COLORS.riskZone,
-  intersection: SCENE_COLORS.intersection,
-  gallery: SCENE_COLORS.gallery,
-};
-
-export function NodeMarkers({ nodes, showLabels }: NodeMarkersProps) {
-  const notable = useMemo(
-    () => nodes.filter((n) => n.node_type !== "gallery"),
-    [nodes]
-  );
-
-  return (
-    <group>
-      {notable.map((node) => {
-        const pos = backendToThreePosition(node.position);
-        const size = SIZE_BY_TYPE[node.node_type] ?? 0.15;
-        const color = COLOR_BY_TYPE[node.node_type] ?? SCENE_COLORS.intersection;
-
-        return (
-          <group key={node.node_id} position={pos}>
-            <mesh>
-              <sphereGeometry args={[size, 16, 16]} />
-              <meshStandardMaterial
-                color={color}
-                emissive={color}
-                emissiveIntensity={0.5}
-                roughness={0.4}
-              />
-            </mesh>
-            {showLabels && (node.label || node.node_type !== "intersection") && (
-              <Html distanceFactor={12} position={[0, size + 0.3, 0]} center>
-                <div className="pointer-events-none whitespace-nowrap rounded-sm bg-void/80 px-1.5 py-0.5 font-mono text-[9px] text-steel2">
-                  {node.label || node.node_id}
-                </div>
-              </Html>
-            )}
-          </group>
-        );
-      })}
-    </group>
-  );
+export function NodeMarkers({ nodes, edges, onSelectNode }: NodeMarkersProps) {
+  const positions = useMemo(() => new Map(nodes.map(n => [n.node_id, backendToThreePosition(n.position)])), [nodes]);
+  return <group>{nodes.filter(n => !["gallery", "intersection"].includes(n.node_type)).map(node => {
+    const position = positions.get(node.node_id)!;
+    const edge = edges.find(e => e.source === node.node_id || e.target === node.node_id);
+    const other = edge ? positions.get(edge.source === node.node_id ? edge.target : edge.source) : null;
+    const angle = other ? Math.atan2(other[0] - position[0], other[2] - position[2]) : 0;
+    const isExit = node.node_type === "exit", isRefuge = node.node_type === "refuge_chamber";
+    const color = isExit ? C.exit : isRefuge ? C.refuge : C.riskZone;
+    return <group key={node.node_id} position={position} rotation={[0, angle, 0]}
+      onClick={e => { e.stopPropagation(); onSelectNode(node.node_id); }}>
+      {(isExit || isRefuge) ? <>
+        <mesh position={[0, 0.015, 0]}><boxGeometry args={[0.7, 0.03, isRefuge ? 0.7 : 0.3]} /><meshStandardMaterial color="#596972" /></mesh>
+        {isRefuge && <mesh position={[0, 0.25, -0.19]}><boxGeometry args={[0.65, 0.5, 0.4]} /><meshStandardMaterial color="#476374" metalness={0.35} roughness={0.65} /></mesh>}
+        {[-1, 1].map(side => <mesh key={side} position={[side * 0.26, 0.27, 0.06]}>
+          <boxGeometry args={[0.065, 0.54, 0.09]} /><meshStandardMaterial color="#b3bfc0" metalness={0.5} roughness={0.5} />
+        </mesh>)}
+        <mesh position={[0, 0.55, 0.06]}><boxGeometry args={[0.6, 0.14, 0.1]} /><meshBasicMaterial color={color} /></mesh>
+        {isRefuge ? <>
+          <mesh position={[0, 0.25, 0.025]}><boxGeometry args={[0.39, 0.44, 0.045]} /><meshStandardMaterial color="#193749" /></mesh>
+          <mesh position={[0, 0.33, 0.057]}><boxGeometry args={[0.05, 0.18, 0.015]} /><meshBasicMaterial color="#edf6f3" /></mesh>
+          <mesh position={[0, 0.33, 0.057]}><boxGeometry args={[0.18, 0.05, 0.018]} /><meshBasicMaterial color="#edf6f3" /></mesh>
+        </> : <mesh position={[0, 0.55, 0.125]} rotation={[0, 0, -Math.PI / 2]}><coneGeometry args={[0.055, 0.13, 3]} /><meshBasicMaterial color="#17382d" /></mesh>}
+      </> : <>
+        <mesh position={[0, 0.2, 0]}><boxGeometry args={[0.025, 0.4, 0.025]} /><meshStandardMaterial color="#b0b4ab" /></mesh>
+        <mesh position={[0, 0.43, 0]} rotation={[0, 0, 0]}><circleGeometry args={[0.18, 3, Math.PI / 2]} /><meshBasicMaterial color={color} side={2} /></mesh>
+        <mesh position={[0, 0.43, 0.006]}><boxGeometry args={[0.018, 0.09, 0.014]} /><meshBasicMaterial color="#33291b" /></mesh>
+        <mesh position={[0, 0.36, 0.007]}><boxGeometry args={[0.021, 0.018, 0.014]} /><meshBasicMaterial color="#33291b" /></mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}><ringGeometry args={[0.28, 0.3, 16]} /><meshBasicMaterial color={color} side={2} /></mesh>
+      </>}
+    </group>;
+  })}</group>;
 }
