@@ -34,15 +34,6 @@ centralizada (nada hardcodeado).
 
 ## Arrancar el backend
 
-```bash
-cd backend
-pip install -r requirements.txt --break-system-packages
-cp ../.env.example ../.env   # ajustar si hace falta
-uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
-# (ejecutar desde la RAÍZ del proyecto, no desde dentro de backend/,
-#  por los imports absolutos `backend.xxx`)
-```
-
 Desde la raíz del proyecto:
 ```bash
 uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
